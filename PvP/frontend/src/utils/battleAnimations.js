@@ -1,4 +1,4 @@
-// src/utils/battleAnimations.js - Complete Animation System (FIXED)
+// src/utils/battleAnimations.js - Enhanced Animation System with All Effects
 import { createRoot } from 'react-dom/client';
 
 // Animation constants for timing
@@ -10,6 +10,8 @@ export const ANIMATION_DURATIONS = {
   TOOL: 900,             // Tool animation duration
   DAMAGE_NUMBER: 1500,   // How long damage numbers show
   TURN_TRANSITION: 600,  // Turn change animation
+  COMBO_INDICATOR: 1000, // Combo effect duration
+  BLOCK_EFFECT: 800,     // Block effect duration
   AI_THINKING: {
     NORMAL: 800,        // Normal AI thinking time
     COMPLEX: 1500       // Complex decision AI thinking time
@@ -48,21 +50,53 @@ export const ANIMATION_CLASSES = {
     PHYSICAL: 'battle-animation-damage-physical',
     MAGICAL: 'battle-animation-damage-magical',
     CRITICAL: 'battle-animation-damage-critical',
-    HEAL: 'battle-animation-damage-heal'
+    HEAL: 'battle-animation-damage-heal',
+    BLOCKED: 'battle-animation-damage-blocked',
+    MISS: 'battle-animation-damage-miss'
   },
   AI: {
     THINKING: 'battle-animation-ai-thinking'
+  },
+  COMBO: {
+    INDICATOR: 'battle-animation-combo-indicator',
+    BURST: 'battle-animation-combo-burst'
   }
 };
 
 /**
+ * Helper to ensure element exists before animation
+ */
+const waitForElement = (selector, timeout = 1000) => {
+  return new Promise((resolve) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      resolve(element);
+      return;
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        obs.disconnect();
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeout);
+  });
+};
+
+/**
  * Creates and animates an attack effect between two card elements
- * @param {HTMLElement} attackerElement The attacker card element
- * @param {HTMLElement} targetElement The target card element
- * @param {string} attackType 'physical' or 'magical'
- * @param {boolean} isCritical Whether this is a critical hit
- * @param {number} damage The damage amount to show
- * @param {Function} onComplete Callback when animation completes
+ * Enhanced with better damage feedback
  */
 export const animateAttack = (
   attackerElement, 
@@ -70,6 +104,7 @@ export const animateAttack = (
   attackType = 'physical', 
   isCritical = false, 
   damage = 0,
+  isBlocked = false,
   onComplete = () => {}
 ) => {
   if (!attackerElement || !targetElement) {
@@ -168,6 +203,12 @@ export const animateAttack = (
       // Make target flash and shake
       targetElement.classList.add('battle-animation-hit');
       
+      // Add blocked effect if damage was blocked
+      if (isBlocked) {
+        targetElement.classList.add('battle-animation-blocked');
+        showBlockEffect(targetElement);
+      }
+      
       // Add impact effect at target position
       const impactEffect = document.createElement('div');
       impactEffect.className = `battle-animation-impact ${attackType === 'magical' ? 'magical' : 'physical'}`;
@@ -178,10 +219,8 @@ export const animateAttack = (
       impactEffect.style.left = `${targetX}px`;
       effectContainer.appendChild(impactEffect);
       
-      // Show damage number if provided
-      if (damage > 0) {
-        showDamageNumber(targetElement, damage, attackType, isCritical);
-      }
+      // ALWAYS show damage number, even if 0
+      showDamageNumber(targetElement, damage, attackType, isCritical, isBlocked);
       
       // Remove impact after animation completes
       setTimeout(() => {
@@ -198,6 +237,7 @@ export const animateAttack = (
       }
       attackerElement.classList.remove('battle-animation-attack-prepare');
       targetElement.classList.remove('battle-animation-hit');
+      targetElement.classList.remove('battle-animation-blocked');
       onComplete();
     }, duration);
   } catch (error) {
@@ -207,19 +247,16 @@ export const animateAttack = (
 };
 
 /**
- * Displays a floating damage number above the target
- * @param {HTMLElement} targetElement Element to show damage above
- * @param {number} amount The amount of damage/healing
- * @param {string} type 'physical', 'magical', or 'heal'
- * @param {boolean} isCritical If this is a critical hit
+ * Enhanced damage number display with support for 0 damage and blocked attacks
  */
 export const showDamageNumber = (
   targetElement, 
   amount,
   type = 'physical',
-  isCritical = false
+  isCritical = false,
+  isBlocked = false
 ) => {
-  if (!targetElement || amount === 0) return;
+  if (!targetElement) return;
   
   try {
     const targetRect = targetElement.getBoundingClientRect();
@@ -229,29 +266,30 @@ export const showDamageNumber = (
     
     // Determine the class based on type and critical status
     let className = '';
-    let displayAmount = amount;
+    let displayText = '';
     
-    if (amount < 0) {
+    if (amount === 0 || isBlocked) {
+      // Show "BLOCKED!" or "MISS!" for 0 damage
+      className = isBlocked ? ANIMATION_CLASSES.DAMAGE_TEXT.BLOCKED : ANIMATION_CLASSES.DAMAGE_TEXT.MISS;
+      displayText = isBlocked ? 'BLOCKED!' : 'MISS!';
+    } else if (amount < 0) {
+      // Healing
       className = ANIMATION_CLASSES.DAMAGE_TEXT.HEAL;
-      displayAmount = Math.abs(amount); // Make healing positive for display
+      displayText = `+${Math.abs(amount)}`;
     } else if (type === 'magical') {
       className = ANIMATION_CLASSES.DAMAGE_TEXT.MAGICAL;
+      displayText = `-${amount}`;
     } else {
       className = ANIMATION_CLASSES.DAMAGE_TEXT.PHYSICAL;
+      displayText = `-${amount}`;
     }
     
-    if (isCritical) {
+    if (isCritical && amount > 0) {
       className += ` ${ANIMATION_CLASSES.DAMAGE_TEXT.CRITICAL}`;
     }
     
     damageElement.className = `battle-animation-damage-text ${className}`;
-    
-    // Format the amount - negative for damage, positive for healing
-    if (amount < 0) {
-      damageElement.textContent = `+${displayAmount}`;
-    } else {
-      damageElement.textContent = `-${displayAmount}`;
-    }
+    damageElement.textContent = displayText;
     
     // Position above the target with a slight random x-offset for multiple hits
     const xOffset = (Math.random() * 40) - 20; // -20 to +20px
@@ -260,13 +298,13 @@ export const showDamageNumber = (
     damageElement.style.top = `${targetRect.top - 20}px`;
     damageElement.style.left = `${targetRect.left + (targetRect.width / 2) + xOffset}px`;
     damageElement.style.transform = 'translate(-50%, -50%)';
-    damageElement.style.zIndex = '9998';
+    damageElement.style.zIndex = '99999';
     
     // Add to body
     document.body.appendChild(damageElement);
     
     // For critical hits, add a "CRITICAL!" label
-    if (isCritical) {
+    if (isCritical && amount > 0) {
       const criticalLabel = document.createElement('div');
       criticalLabel.className = 'battle-animation-critical-label';
       criticalLabel.textContent = 'CRITICAL!';
@@ -274,9 +312,12 @@ export const showDamageNumber = (
       criticalLabel.style.top = `${targetRect.top - 40}px`;
       criticalLabel.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
       criticalLabel.style.transform = 'translate(-50%, -50%)';
-      criticalLabel.style.zIndex = '9998';
+      criticalLabel.style.zIndex = '99999';
       
       document.body.appendChild(criticalLabel);
+      
+      // Add screen shake for critical hits
+      shakeScreen(3, 300);
       
       // Remove after animation
       setTimeout(() => {
@@ -298,9 +339,150 @@ export const showDamageNumber = (
 };
 
 /**
- * Animates a defend action
- * @param {HTMLElement} defenderElement The defender's card element
- * @param {Function} onComplete Callback when animation completes
+ * Shows a block effect shield when damage is blocked
+ */
+export const showBlockEffect = (targetElement) => {
+  if (!targetElement) return;
+  
+  try {
+    const rect = targetElement.getBoundingClientRect();
+    
+    // Create block shield effect
+    const blockEffect = document.createElement('div');
+    blockEffect.className = 'battle-animation-block-shield';
+    
+    blockEffect.style.position = 'fixed';
+    blockEffect.style.top = `${rect.top + (rect.height / 2)}px`;
+    blockEffect.style.left = `${rect.left + (rect.width / 2)}px`;
+    blockEffect.style.transform = 'translate(-50%, -50%)';
+    blockEffect.style.zIndex = '9997';
+    
+    document.body.appendChild(blockEffect);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (blockEffect && blockEffect.parentNode) {
+        blockEffect.remove();
+      }
+    }, ANIMATION_DURATIONS.BLOCK_EFFECT);
+  } catch (error) {
+    console.error('Error in showBlockEffect:', error);
+  }
+};
+
+/**
+ * Shows combo indicator effect
+ */
+export const showComboIndicator = (comboLevel, isPlayer = true) => {
+  try {
+    // Create combo indicator
+    const comboIndicator = document.createElement('div');
+    comboIndicator.className = `${ANIMATION_CLASSES.COMBO.INDICATOR} ${isPlayer ? 'player' : 'enemy'}`;
+    
+    comboIndicator.innerHTML = `
+      <div class="combo-text">COMBO x${comboLevel}!</div>
+      <div class="combo-burst"></div>
+    `;
+    
+    // Position at top center of screen
+    comboIndicator.style.position = 'fixed';
+    comboIndicator.style.top = '100px';
+    comboIndicator.style.left = '50%';
+    comboIndicator.style.transform = 'translateX(-50%)';
+    comboIndicator.style.zIndex = '9999';
+    
+    document.body.appendChild(comboIndicator);
+    
+    // Add burst effect for high combos
+    if (comboLevel >= 3) {
+      screenFlash(isPlayer ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)', 400, 0.4);
+      
+      // Add particle burst at center
+      const centerX = window.innerWidth / 2;
+      const centerY = 150;
+      generateComboBurst(centerX, centerY, isPlayer ? 'combo-player' : 'combo-enemy');
+    }
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (comboIndicator && comboIndicator.parentNode) {
+        comboIndicator.remove();
+      }
+    }, ANIMATION_DURATIONS.COMBO_INDICATOR);
+  } catch (error) {
+    console.error('Error in showComboIndicator:', error);
+  }
+};
+
+/**
+ * Generates a burst of particles for combo effects
+ */
+export const generateComboBurst = (x, y, particleClass = 'combo-player') => {
+  try {
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.top = '0';
+    container.style.left = '0';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.pointerEvents = 'none';
+    container.style.zIndex = '9995';
+    
+    document.body.appendChild(container);
+    
+    // Generate burst particles
+    for (let i = 0; i < 20; i++) {
+      const particle = document.createElement('div');
+      particle.className = `battle-animation-particle ${particleClass}`;
+      
+      // Randomize burst properties
+      const angle = (Math.PI * 2 * i) / 20;
+      const distance = Math.random() * 100 + 50;
+      const size = Math.random() * 10 + 5;
+      const duration = Math.random() * 1000 + 500;
+      
+      // Set initial position
+      particle.style.position = 'absolute';
+      particle.style.top = `${y}px`;
+      particle.style.left = `${x}px`;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      
+      // Set animation properties for burst
+      const endX = x + Math.cos(angle) * distance;
+      const endY = y + Math.sin(angle) * distance;
+      
+      particle.style.setProperty('--end-x', `${endX}px`);
+      particle.style.setProperty('--end-y', `${endY}px`);
+      particle.style.setProperty('--duration', `${duration}ms`);
+      
+      // Add to container
+      container.appendChild(particle);
+      
+      // Add burst animation class
+      particle.classList.add('burst');
+      
+      // Remove after animation
+      setTimeout(() => {
+        if (particle && particle.parentNode) {
+          particle.remove();
+        }
+      }, duration);
+    }
+    
+    // Clean up container after all particles are gone
+    setTimeout(() => {
+      if (container && container.parentNode) {
+        container.remove();
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('Error in generateComboBurst:', error);
+  }
+};
+
+/**
+ * Animates a defend action with enhanced visuals
  */
 export const animateDefend = (defenderElement, onComplete = () => {}) => {
   if (!defenderElement) {
@@ -327,6 +509,9 @@ export const animateDefend = (defenderElement, onComplete = () => {}) => {
     
     // Add shield to body
     document.body.appendChild(shieldEffect);
+    
+    // Add shield particles
+    generateParticles(defenderElement, 'shield', 8);
     
     // Clean up after animation completes
     setTimeout(() => {
@@ -477,15 +662,13 @@ export const animateSpell = (
         // Add hit effect to target
         targetElement.classList.add('battle-animation-spell-hit');
         
-        // Show damage number if provided
-        if (damage !== 0) {
-          showDamageNumber(
-            targetElement, 
-            damage, 
-            'magical', 
-            false
-          );
-        }
+        // ALWAYS show damage/heal number
+        showDamageNumber(
+          targetElement, 
+          damage, 
+          'magical', 
+          false
+        );
         
         // Clean up impact after animation
         setTimeout(() => {
@@ -823,7 +1006,7 @@ export const shakeScreen = (intensity = 5, duration = 500) => {
 /**
  * Generates particles at a target position
  * @param {HTMLElement} targetElement Element to generate particles at
- * @param {string} particleType Type of particles ('damage', 'heal', etc)
+ * @param {string} particleType Type of particles ('damage', 'heal', 'shield', etc)
  * @param {number} count Number of particles to generate
  */
 export const generateParticles = (targetElement, particleType = 'damage', count = 10) => {
@@ -895,6 +1078,29 @@ export const generateParticles = (targetElement, particleType = 'damage', count 
 };
 
 /**
+ * Gets the DOM element for a creature by ID with retry logic
+ * @param {string} creatureId The creature's ID
+ * @param {boolean} isEnemy Whether it's an enemy creature
+ * @returns {Promise<HTMLElement|null>} Promise that resolves to the creature's DOM element or null
+ */
+export const getCreatureElementWithRetry = async (creatureId, isEnemy = false) => {
+  // Build selector for the creature card
+  const selector = `.${isEnemy ? 'battlefield-enemy' : 'battlefield-player'} .creature-card[data-id="${creatureId}"]`;
+  
+  // Try to get element immediately
+  let element = document.querySelector(selector);
+  if (element) return element;
+  
+  // If not found, wait and retry
+  await new Promise(resolve => setTimeout(resolve, 100));
+  element = document.querySelector(selector);
+  if (element) return element;
+  
+  // Final attempt with mutation observer
+  return waitForElement(selector, 500);
+};
+
+/**
  * Gets the DOM element for a creature by ID
  * @param {string} creatureId The creature's ID
  * @param {boolean} isEnemy Whether it's an enemy creature
@@ -933,11 +1139,16 @@ export default {
   animateTurnTransition,
   showAIThinking,
   showDamageNumber,
+  showBlockEffect,
+  showComboIndicator,
+  generateComboBurst,
   screenFlash,
   shakeScreen,
   generateParticles,
   getCreatureElement,
+  getCreatureElementWithRetry,
   animateWithTiming,
+  waitForElement,
   ANIMATION_DURATIONS,
   ANIMATION_CLASSES
 };
