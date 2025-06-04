@@ -65,6 +65,14 @@
   100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
 }
 
+/* Block Animation */
+@keyframes battle-animation-block-pulse {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
 /* Defend Animations */
 @keyframes battle-animation-shield-pulse {
   0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.2; }
@@ -151,6 +159,40 @@
   }
 }
 
+/* Combo Animations */
+@keyframes battle-animation-combo-appear {
+  0% {
+    transform: translateX(-50%) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(-50%) scale(1.3);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(-50%) scale(1.1);
+  }
+  80% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) scale(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes battle-animation-combo-burst-expand {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(4);
+    opacity: 0;
+  }
+}
+
 /* Turn Transition */
 @keyframes battle-animation-turn-slide {
   0% { transform: translateY(-50px); opacity: 0; }
@@ -195,6 +237,23 @@
       translate(
         calc(-50% + (cos(var(--angle, 0deg)) * var(--distance, 30px))), 
         calc(-50% + (sin(var(--angle, 0deg)) * var(--distance, 30px)))
+      )
+      scale(0);
+    opacity: 0;
+  }
+}
+
+/* Particle Burst Animation */
+@keyframes battle-animation-particle-burst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: 
+      translate(
+        calc(var(--end-x, 0px) - 50%),
+        calc(var(--end-y, 0px) - 50%)
       )
       scale(0);
     opacity: 0;
@@ -296,6 +355,11 @@
   z-index: 51 !important;
 }
 
+/* Blocked Attack Effect */
+.battle-animation-blocked {
+  filter: brightness(0.8) sepia(0.3) !important;
+}
+
 /* Impact Effect */
 .battle-animation-impact {
   position: absolute;
@@ -324,6 +388,28 @@
   filter: brightness(1.5) contrast(1.3);
   transform: scale(1.5);
   box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+}
+
+/* ===== BLOCK EFFECT ===== */
+
+/* Block Shield Effect */
+.battle-animation-block-shield {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(200, 200, 200, 0.8) 0%,
+    rgba(150, 150, 150, 0.5) 40%,
+    rgba(100, 100, 100, 0.2) 70%,
+    rgba(50, 50, 50, 0) 100%
+  );
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 0 20px rgba(255, 255, 255, 0.6),
+    inset 0 0 20px rgba(200, 200, 200, 0.4);
+  animation: battle-animation-block-pulse 0.8s cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
+  z-index: 9997;
 }
 
 /* ===== DEFEND ANIMATIONS ===== */
@@ -802,7 +888,7 @@
     0 0 30px rgba(255, 215, 0, 0.8),
     0 4px 15px rgba(0, 0, 0, 0.6),
     inset 0 0 15px rgba(255, 255, 100, 0.4);
-  animation: battle-animation-damage-float 2s cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
+  animation: battle-animation-critical-text 2s cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
 }
 
 /* Healing - Enhanced */
@@ -814,6 +900,31 @@
     0 0 25px rgba(0, 255, 0, 0.6),
     0 4px 12px rgba(0, 0, 0, 0.5),
     inset 0 0 10px rgba(100, 255, 100, 0.3);
+}
+
+/* Blocked Damage - NEW */
+.battle-animation-damage-text.battle-animation-damage-blocked {
+  color: #CCCCCC;
+  font-size: 20px;
+  background: linear-gradient(135deg, rgba(80, 80, 80, 0.9), rgba(50, 50, 50, 0.9));
+  border-color: #999999;
+  box-shadow: 
+    0 0 20px rgba(150, 150, 150, 0.6),
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 0 10px rgba(200, 200, 200, 0.3);
+}
+
+/* Miss - NEW */
+.battle-animation-damage-text.battle-animation-damage-miss {
+  color: #FF9999;
+  font-size: 18px;
+  font-style: italic;
+  background: linear-gradient(135deg, rgba(100, 50, 50, 0.9), rgba(60, 30, 30, 0.9));
+  border-color: #CC6666;
+  box-shadow: 
+    0 0 15px rgba(200, 100, 100, 0.5),
+    0 4px 10px rgba(0, 0, 0, 0.4),
+    inset 0 0 8px rgba(255, 150, 150, 0.2);
 }
 
 /* Critical Label - Enhanced */
@@ -839,6 +950,73 @@
   pointer-events: none;
   z-index: 99999 !important;
   position: fixed !important;
+}
+
+/* ===== COMBO ANIMATIONS ===== */
+
+/* Combo Indicator */
+.battle-animation-combo-indicator {
+  animation: battle-animation-combo-appear 1s cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
+  z-index: 9999;
+}
+
+.battle-animation-combo-indicator .combo-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  text-shadow: 
+    3px 3px 6px rgba(0, 0, 0, 0.9),
+    -2px -2px 4px rgba(0, 0, 0, 0.8),
+    0 0 20px rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 30px;
+  border: 3px solid;
+  box-shadow: 
+    0 0 40px rgba(0, 0, 0, 0.8),
+    0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* Player Combo */
+.battle-animation-combo-indicator.player .combo-text {
+  color: #66FF66;
+  background: linear-gradient(135deg, rgba(0, 120, 0, 0.95), rgba(0, 80, 0, 0.95));
+  border-color: #4CAF50;
+  box-shadow: 
+    0 0 40px rgba(76, 175, 80, 0.8),
+    0 6px 20px rgba(0, 0, 0, 0.6),
+    inset 0 0 20px rgba(100, 255, 100, 0.4);
+}
+
+/* Enemy Combo */
+.battle-animation-combo-indicator.enemy .combo-text {
+  color: #FF6666;
+  background: linear-gradient(135deg, rgba(120, 0, 0, 0.95), rgba(80, 0, 0, 0.95));
+  border-color: #F44336;
+  box-shadow: 
+    0 0 40px rgba(244, 67, 54, 0.8),
+    0 6px 20px rgba(0, 0, 0, 0.6),
+    inset 0 0 20px rgba(255, 100, 100, 0.4);
+}
+
+/* Combo Burst Effect */
+.battle-animation-combo-indicator .combo-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  animation: battle-animation-combo-burst-expand 0.8s cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
+}
+
+.battle-animation-combo-indicator.player .combo-burst {
+  background: radial-gradient(circle, rgba(76, 175, 80, 0.8), rgba(76, 175, 80, 0));
+}
+
+.battle-animation-combo-indicator.enemy .combo-burst {
+  background: radial-gradient(circle, rgba(244, 67, 54, 0.8), rgba(244, 67, 54, 0));
 }
 
 /* ===== TURN TRANSITION ANIMATIONS ===== */
@@ -996,6 +1174,28 @@
   box-shadow: 0 0 5px rgba(255, 215, 0, 0.7);
 }
 
+/* Shield Particles */
+.battle-animation-particle.shield {
+  background-color: #2196F3;
+  box-shadow: 0 0 5px rgba(33, 150, 243, 0.7);
+}
+
+/* Combo Particles */
+.battle-animation-particle.combo-player {
+  background-color: #4CAF50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+}
+
+.battle-animation-particle.combo-enemy {
+  background-color: #F44336;
+  box-shadow: 0 0 8px rgba(244, 67, 54, 0.8);
+}
+
+/* Burst Animation for Particles */
+.battle-animation-particle.burst {
+  animation: battle-animation-particle-burst var(--duration, 1000ms) cubic-bezier(0.2, 0.85, 0.4, 1) forwards;
+}
+
 /* ===== CREATURE CARD ANIMATION EXTENSIONS ===== */
 
 /* Extend existing card classes to make animations work with them */
@@ -1061,7 +1261,8 @@
 
 /* Force damage numbers to appear above everything */
 .battle-animation-damage-text,
-.battle-animation-critical-label {
+.battle-animation-critical-label,
+.battle-animation-combo-indicator {
   z-index: 99999 !important;
   position: fixed !important;
 }
@@ -1082,6 +1283,11 @@
   
   .battle-animation-damage-text.battle-animation-damage-critical {
     font-size: 24px;
+  }
+  
+  .battle-animation-damage-text.battle-animation-damage-blocked,
+  .battle-animation-damage-text.battle-animation-damage-miss {
+    font-size: 16px;
   }
   
   .battle-animation-critical-label {
@@ -1110,6 +1316,11 @@
     width: 100px;
     height: 100px;
   }
+  
+  .battle-animation-combo-indicator .combo-text {
+    font-size: 28px;
+    padding: 8px 16px;
+  }
 }
 
 /* Reduced motion preferences */
@@ -1122,7 +1333,8 @@
   .battle-animation-spell-projectile,
   .battle-animation-impact,
   .battle-animation-spell-impact,
-  .battle-animation-particle {
+  .battle-animation-particle,
+  .battle-animation-combo-indicator {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
