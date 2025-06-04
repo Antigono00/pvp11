@@ -1,10 +1,10 @@
-// src/utils/battleAnimations.js - Complete Animation System (FIXED EXPORTS)
+// src/utils/battleAnimations.js - Complete Animation System (FIXED)
 import { createRoot } from 'react-dom/client';
 
 // Animation constants for timing
 export const ANIMATION_DURATIONS = {
   ATTACK: 800,           // Base attack animation duration
-  ATTACK_CRITICAL: 1200, // Critical attack animation
+  ATTACK_CRITICAL: 1200, // Critical attack animation duration
   DEFEND: 600,           // Defend animation duration
   SPELL: 1200,           // Spell animation duration
   TOOL: 900,             // Tool animation duration
@@ -78,123 +78,132 @@ export const animateAttack = (
     return;
   }
 
-  // 1. Add attack preparation class to attacker
-  attackerElement.classList.add('battle-animation-attack-prepare');
-  
-  // Get bounding rectangles for position calculation
-  const attackerRect = attackerElement.getBoundingClientRect();
-  const targetRect = targetElement.getBoundingClientRect();
-  
-  // 2. Create attack effect container
-  const effectContainer = document.createElement('div');
-  effectContainer.className = 'battle-animation-container';
-  document.body.appendChild(effectContainer);
-  
-  // 3. Position the container properly in viewport
-  effectContainer.style.position = 'fixed';
-  effectContainer.style.top = '0';
-  effectContainer.style.left = '0';
-  effectContainer.style.width = '100%';
-  effectContainer.style.height = '100%';
-  effectContainer.style.pointerEvents = 'none';
-  effectContainer.style.zIndex = '9997';
-  
-  // 4. Create attack effect element
-  const attackEffect = document.createElement('div');
-  
-  // Apply the correct attack class based on type and critical
-  if (attackType === 'magical') {
-    attackEffect.className = `battle-animation-effect ${ANIMATION_CLASSES.ATTACK.MAGICAL}`;
-  } else {
-    attackEffect.className = `battle-animation-effect ${ANIMATION_CLASSES.ATTACK.PHYSICAL}`;
-  }
-  
-  if (isCritical) {
-    attackEffect.classList.add(ANIMATION_CLASSES.ATTACK.CRITICAL);
-  }
-  
-  // 5. Position the effect to start from attacker
-  attackEffect.style.position = 'absolute';
-  attackEffect.style.top = `${attackerRect.top + (attackerRect.height / 2)}px`;
-  attackEffect.style.left = `${attackerRect.left + (attackerRect.width / 2)}px`;
-  
-  // Add effect to container
-  effectContainer.appendChild(attackEffect);
-  
-  // 6. Calculate target position and set properties for animation
-  const targetX = targetRect.left + (targetRect.width / 2);
-  const targetY = targetRect.top + (targetRect.height / 2);
-  
-  // Set animation destination via CSS variables
-  attackEffect.style.setProperty('--target-x', `${targetX}px`);
-  attackEffect.style.setProperty('--target-y', `${targetY}px`);
-  
-  // Calculate distance for attack scaling
-  const dx = targetX - (attackerRect.left + (attackerRect.width / 2));
-  const dy = targetY - (attackerRect.top + (attackerRect.height / 2));
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  // Set distance for animation scaling
-  attackEffect.style.setProperty('--distance', `${distance}px`);
-  
-  // Calculate angle for proper orientation
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  attackEffect.style.setProperty('--angle', `${angle}deg`);
-  
-  // 7. Prepare timing variables
-  const duration = isCritical ? 
-    ANIMATION_DURATIONS.ATTACK_CRITICAL : 
-    ANIMATION_DURATIONS.ATTACK;
-  
-  // 8. Apply animation timing class
-  attackEffect.classList.add('animate');
-  
-  // 9. Make the attacker "lunge" toward target
-  attackerElement.style.transition = 'transform 150ms ease-out';
-  const lungeDistance = Math.min(30, distance * 0.15);
-  const lungeX = (dx / distance) * lungeDistance;
-  const lungeY = (dy / distance) * lungeDistance;
-  attackerElement.style.transform = `translate(${lungeX}px, ${lungeY}px)`;
-  
-  // 10. Reset attacker position after small delay
-  setTimeout(() => {
-    attackerElement.style.transition = 'transform 300ms ease-out';
-    attackerElement.style.transform = '';
-  }, 150);
-  
-  // 11. Play impact effect at halfway point
-  setTimeout(() => {
-    // Make target flash and shake
-    targetElement.classList.add('battle-animation-hit');
+  try {
+    // 1. Add attack preparation class to attacker
+    attackerElement.classList.add('battle-animation-attack-prepare');
     
-    // Add impact effect at target position
-    const impactEffect = document.createElement('div');
-    impactEffect.className = `battle-animation-impact ${attackType === 'magical' ? 'magical' : 'physical'}`;
-    if (isCritical) impactEffect.classList.add('critical');
+    // Get bounding rectangles for position calculation
+    const attackerRect = attackerElement.getBoundingClientRect();
+    const targetRect = targetElement.getBoundingClientRect();
     
-    impactEffect.style.position = 'absolute';
-    impactEffect.style.top = `${targetY}px`;
-    impactEffect.style.left = `${targetX}px`;
-    effectContainer.appendChild(impactEffect);
+    // 2. Create attack effect container
+    const effectContainer = document.createElement('div');
+    effectContainer.className = 'battle-animation-container';
+    document.body.appendChild(effectContainer);
     
-    // Show damage number if provided
-    if (damage > 0) {
-      showDamageNumber(targetElement, damage, attackType, isCritical);
+    // 3. Position the container properly in viewport
+    effectContainer.style.position = 'fixed';
+    effectContainer.style.top = '0';
+    effectContainer.style.left = '0';
+    effectContainer.style.width = '100%';
+    effectContainer.style.height = '100%';
+    effectContainer.style.pointerEvents = 'none';
+    effectContainer.style.zIndex = '9997';
+    
+    // 4. Create attack effect element
+    const attackEffect = document.createElement('div');
+    
+    // Apply the correct attack class based on type and critical
+    if (attackType === 'magical') {
+      attackEffect.className = `battle-animation-effect ${ANIMATION_CLASSES.ATTACK.MAGICAL}`;
+    } else {
+      attackEffect.className = `battle-animation-effect ${ANIMATION_CLASSES.ATTACK.PHYSICAL}`;
     }
     
-    // Remove impact after animation completes
+    if (isCritical) {
+      attackEffect.classList.add(ANIMATION_CLASSES.ATTACK.CRITICAL);
+    }
+    
+    // 5. Position the effect to start from attacker
+    attackEffect.style.position = 'absolute';
+    attackEffect.style.top = `${attackerRect.top + (attackerRect.height / 2)}px`;
+    attackEffect.style.left = `${attackerRect.left + (attackerRect.width / 2)}px`;
+    
+    // Add effect to container
+    effectContainer.appendChild(attackEffect);
+    
+    // 6. Calculate target position and set properties for animation
+    const targetX = targetRect.left + (targetRect.width / 2);
+    const targetY = targetRect.top + (targetRect.height / 2);
+    
+    // Set animation destination via CSS variables
+    attackEffect.style.setProperty('--target-x', `${targetX}px`);
+    attackEffect.style.setProperty('--target-y', `${targetY}px`);
+    
+    // Calculate distance for attack scaling
+    const dx = targetX - (attackerRect.left + (attackerRect.width / 2));
+    const dy = targetY - (attackerRect.top + (attackerRect.height / 2));
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Set distance for animation scaling
+    attackEffect.style.setProperty('--distance', `${distance}px`);
+    
+    // Calculate angle for proper orientation
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    attackEffect.style.setProperty('--angle', `${angle}deg`);
+    
+    // 7. Prepare timing variables
+    const duration = isCritical ? 
+      ANIMATION_DURATIONS.ATTACK_CRITICAL : 
+      ANIMATION_DURATIONS.ATTACK;
+    
+    // 8. Apply animation timing class
+    attackEffect.classList.add('animate');
+    
+    // 9. Make the attacker "lunge" toward target
+    attackerElement.style.transition = 'transform 150ms ease-out';
+    const lungeDistance = Math.min(30, distance * 0.15);
+    const lungeX = (dx / distance) * lungeDistance;
+    const lungeY = (dy / distance) * lungeDistance;
+    attackerElement.style.transform = `translate(${lungeX}px, ${lungeY}px)`;
+    
+    // 10. Reset attacker position after small delay
     setTimeout(() => {
-      impactEffect.remove();
-    }, 600);
-  }, duration / 2);
-  
-  // 12. Cleanup and callback after animation completes
-  setTimeout(() => {
-    effectContainer.remove();
-    attackerElement.classList.remove('battle-animation-attack-prepare');
-    targetElement.classList.remove('battle-animation-hit');
+      attackerElement.style.transition = 'transform 300ms ease-out';
+      attackerElement.style.transform = '';
+    }, 150);
+    
+    // 11. Play impact effect at halfway point
+    setTimeout(() => {
+      // Make target flash and shake
+      targetElement.classList.add('battle-animation-hit');
+      
+      // Add impact effect at target position
+      const impactEffect = document.createElement('div');
+      impactEffect.className = `battle-animation-impact ${attackType === 'magical' ? 'magical' : 'physical'}`;
+      if (isCritical) impactEffect.classList.add('critical');
+      
+      impactEffect.style.position = 'absolute';
+      impactEffect.style.top = `${targetY}px`;
+      impactEffect.style.left = `${targetX}px`;
+      effectContainer.appendChild(impactEffect);
+      
+      // Show damage number if provided
+      if (damage > 0) {
+        showDamageNumber(targetElement, damage, attackType, isCritical);
+      }
+      
+      // Remove impact after animation completes
+      setTimeout(() => {
+        if (impactEffect && impactEffect.parentNode) {
+          impactEffect.remove();
+        }
+      }, 600);
+    }, duration / 2);
+    
+    // 12. Cleanup and callback after animation completes
+    setTimeout(() => {
+      if (effectContainer && effectContainer.parentNode) {
+        effectContainer.remove();
+      }
+      attackerElement.classList.remove('battle-animation-attack-prepare');
+      targetElement.classList.remove('battle-animation-hit');
+      onComplete();
+    }, duration);
+  } catch (error) {
+    console.error('Error in animateAttack:', error);
     onComplete();
-  }, duration);
+  }
 };
 
 /**
@@ -210,72 +219,82 @@ export const showDamageNumber = (
   type = 'physical',
   isCritical = false
 ) => {
-  if (!targetElement) return;
+  if (!targetElement || amount === 0) return;
   
-  const targetRect = targetElement.getBoundingClientRect();
-  
-  // Create damage number element
-  const damageElement = document.createElement('div');
-  
-  // Determine the class based on type and critical status
-  let className = '';
-  if (amount < 0) {
-    className = ANIMATION_CLASSES.DAMAGE_TEXT.HEAL;
-    amount = Math.abs(amount); // Make healing positive for display
-  } else if (type === 'magical') {
-    className = ANIMATION_CLASSES.DAMAGE_TEXT.MAGICAL;
-  } else {
-    className = ANIMATION_CLASSES.DAMAGE_TEXT.PHYSICAL;
-  }
-  
-  if (isCritical) {
-    className += ` ${ANIMATION_CLASSES.DAMAGE_TEXT.CRITICAL}`;
-  }
-  
-  damageElement.className = `battle-animation-damage-text ${className}`;
-  
-  // Format the amount - negative for damage, positive for healing
-  if (amount < 0) {
-    damageElement.textContent = `+${Math.abs(amount)}`;
-  } else {
-    damageElement.textContent = `-${amount}`;
-  }
-  
-  // Position above the target with a slight random x-offset for multiple hits
-  const xOffset = (Math.random() * 40) - 20; // -20 to +20px
-  
-  damageElement.style.position = 'fixed';
-  damageElement.style.top = `${targetRect.top - 20}px`;
-  damageElement.style.left = `${targetRect.left + (targetRect.width / 2) + xOffset}px`;
-  damageElement.style.transform = 'translate(-50%, -50%)';
-  damageElement.style.zIndex = '9998';
-  
-  // Add to body
-  document.body.appendChild(damageElement);
-  
-  // For critical hits, add a "CRITICAL!" label
-  if (isCritical) {
-    const criticalLabel = document.createElement('div');
-    criticalLabel.className = 'battle-animation-critical-label';
-    criticalLabel.textContent = 'CRITICAL!';
-    criticalLabel.style.position = 'fixed';
-    criticalLabel.style.top = `${targetRect.top - 40}px`;
-    criticalLabel.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
-    criticalLabel.style.transform = 'translate(-50%, -50%)';
-    criticalLabel.style.zIndex = '9998';
+  try {
+    const targetRect = targetElement.getBoundingClientRect();
     
-    document.body.appendChild(criticalLabel);
+    // Create damage number element
+    const damageElement = document.createElement('div');
+    
+    // Determine the class based on type and critical status
+    let className = '';
+    let displayAmount = amount;
+    
+    if (amount < 0) {
+      className = ANIMATION_CLASSES.DAMAGE_TEXT.HEAL;
+      displayAmount = Math.abs(amount); // Make healing positive for display
+    } else if (type === 'magical') {
+      className = ANIMATION_CLASSES.DAMAGE_TEXT.MAGICAL;
+    } else {
+      className = ANIMATION_CLASSES.DAMAGE_TEXT.PHYSICAL;
+    }
+    
+    if (isCritical) {
+      className += ` ${ANIMATION_CLASSES.DAMAGE_TEXT.CRITICAL}`;
+    }
+    
+    damageElement.className = `battle-animation-damage-text ${className}`;
+    
+    // Format the amount - negative for damage, positive for healing
+    if (amount < 0) {
+      damageElement.textContent = `+${displayAmount}`;
+    } else {
+      damageElement.textContent = `-${displayAmount}`;
+    }
+    
+    // Position above the target with a slight random x-offset for multiple hits
+    const xOffset = (Math.random() * 40) - 20; // -20 to +20px
+    
+    damageElement.style.position = 'fixed';
+    damageElement.style.top = `${targetRect.top - 20}px`;
+    damageElement.style.left = `${targetRect.left + (targetRect.width / 2) + xOffset}px`;
+    damageElement.style.transform = 'translate(-50%, -50%)';
+    damageElement.style.zIndex = '9998';
+    
+    // Add to body
+    document.body.appendChild(damageElement);
+    
+    // For critical hits, add a "CRITICAL!" label
+    if (isCritical) {
+      const criticalLabel = document.createElement('div');
+      criticalLabel.className = 'battle-animation-critical-label';
+      criticalLabel.textContent = 'CRITICAL!';
+      criticalLabel.style.position = 'fixed';
+      criticalLabel.style.top = `${targetRect.top - 40}px`;
+      criticalLabel.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
+      criticalLabel.style.transform = 'translate(-50%, -50%)';
+      criticalLabel.style.zIndex = '9998';
+      
+      document.body.appendChild(criticalLabel);
+      
+      // Remove after animation
+      setTimeout(() => {
+        if (criticalLabel && criticalLabel.parentNode) {
+          criticalLabel.remove();
+        }
+      }, ANIMATION_DURATIONS.DAMAGE_NUMBER);
+    }
     
     // Remove after animation
     setTimeout(() => {
-      criticalLabel.remove();
+      if (damageElement && damageElement.parentNode) {
+        damageElement.remove();
+      }
     }, ANIMATION_DURATIONS.DAMAGE_NUMBER);
+  } catch (error) {
+    console.error('Error in showDamageNumber:', error);
   }
-  
-  // Remove after animation
-  setTimeout(() => {
-    damageElement.remove();
-  }, ANIMATION_DURATIONS.DAMAGE_NUMBER);
 };
 
 /**
@@ -290,30 +309,37 @@ export const animateDefend = (defenderElement, onComplete = () => {}) => {
     return;
   }
   
-  // Add defend animation class
-  defenderElement.classList.add('battle-animation-defending');
-  
-  // Create shield effect element
-  const shieldEffect = document.createElement('div');
-  shieldEffect.className = 'battle-animation-shield';
-  
-  // Position the shield effect relative to the defender
-  const rect = defenderElement.getBoundingClientRect();
-  shieldEffect.style.position = 'fixed';
-  shieldEffect.style.top = `${rect.top + (rect.height / 2)}px`;
-  shieldEffect.style.left = `${rect.left + (rect.width / 2)}px`;
-  shieldEffect.style.transform = 'translate(-50%, -50%)';
-  shieldEffect.style.zIndex = '9998';
-  
-  // Add shield to body
-  document.body.appendChild(shieldEffect);
-  
-  // Clean up after animation completes
-  setTimeout(() => {
-    shieldEffect.remove();
-    defenderElement.classList.remove('battle-animation-defending');
+  try {
+    // Add defend animation class
+    defenderElement.classList.add('battle-animation-defending');
+    
+    // Create shield effect element
+    const shieldEffect = document.createElement('div');
+    shieldEffect.className = 'battle-animation-shield';
+    
+    // Position the shield effect relative to the defender
+    const rect = defenderElement.getBoundingClientRect();
+    shieldEffect.style.position = 'fixed';
+    shieldEffect.style.top = `${rect.top + (rect.height / 2)}px`;
+    shieldEffect.style.left = `${rect.left + (rect.width / 2)}px`;
+    shieldEffect.style.transform = 'translate(-50%, -50%)';
+    shieldEffect.style.zIndex = '9998';
+    
+    // Add shield to body
+    document.body.appendChild(shieldEffect);
+    
+    // Clean up after animation completes
+    setTimeout(() => {
+      if (shieldEffect && shieldEffect.parentNode) {
+        shieldEffect.remove();
+      }
+      defenderElement.classList.remove('battle-animation-defending');
+      onComplete();
+    }, ANIMATION_DURATIONS.DEFEND);
+  } catch (error) {
+    console.error('Error in animateDefend:', error);
     onComplete();
-  }, ANIMATION_DURATIONS.DEFEND);
+  }
 };
 
 /**
@@ -337,148 +363,159 @@ export const animateSpell = (
     return;
   }
   
-  // 1. Determine spell type from spell object
-  let spellType = ANIMATION_CLASSES.SPELL.DEFAULT;
-  
-  // Analyze spell properties to determine visual type
-  if (spell) {
-    const spellName = (spell.name || '').toLowerCase();
-    const spellEffect = (spell.spell_effect || '').toLowerCase();
-    const spellType = (spell.spell_type || '').toLowerCase();
+  try {
+    // 1. Determine spell type from spell object
+    let spellVisualType = ANIMATION_CLASSES.SPELL.DEFAULT;
     
-    if (spellEffect === 'heal' || spellName.includes('heal') || 
-        spellType === 'heal' || damage < 0) {
-      spellType = ANIMATION_CLASSES.SPELL.HEAL;
-    } 
-    else if (spellName.includes('fire') || spellName.includes('flame') ||
-             spellName.includes('burn') || spellEffect === 'surge') {
-      spellType = ANIMATION_CLASSES.SPELL.FIRE;
+    // Analyze spell properties to determine visual type
+    if (spell) {
+      const spellName = (spell.name || '').toLowerCase();
+      const spellEffect = (spell.spell_effect || '').toLowerCase();
+      const spellTypeProperty = (spell.spell_type || '').toLowerCase();
+      
+      if (spellEffect === 'heal' || spellName.includes('heal') || 
+          spellTypeProperty === 'heal' || damage < 0) {
+        spellVisualType = ANIMATION_CLASSES.SPELL.HEAL;
+      } 
+      else if (spellName.includes('fire') || spellName.includes('flame') ||
+               spellName.includes('burn') || spellEffect === 'surge') {
+        spellVisualType = ANIMATION_CLASSES.SPELL.FIRE;
+      }
+      else if (spellName.includes('ice') || spellName.includes('frost') ||
+               spellName.includes('freez')) {
+        spellVisualType = ANIMATION_CLASSES.SPELL.ICE;
+      }
+      else if (spellName.includes('lightning') || spellName.includes('thunder') ||
+               spellName.includes('shock') || spellName.includes('bolt')) {
+        spellVisualType = ANIMATION_CLASSES.SPELL.LIGHTNING;
+      }
+      else if (spellName.includes('dark') || spellName.includes('shadow') || 
+               spellName.includes('void') || spellName.includes('death')) {
+        spellVisualType = ANIMATION_CLASSES.SPELL.DARK;
+      }
+      else if (spellEffect === 'buff' || spellName.includes('buff') || 
+               spellName.includes('boost') || spellName.includes('enhance')) {
+        spellVisualType = ANIMATION_CLASSES.SPELL.BUFF;
+      }
     }
-    else if (spellName.includes('ice') || spellName.includes('frost') ||
-             spellName.includes('freez')) {
-      spellType = ANIMATION_CLASSES.SPELL.ICE;
-    }
-    else if (spellName.includes('lightning') || spellName.includes('thunder') ||
-             spellName.includes('shock') || spellName.includes('bolt')) {
-      spellType = ANIMATION_CLASSES.SPELL.LIGHTNING;
-    }
-    else if (spellName.includes('dark') || spellName.includes('shadow') || 
-             spellName.includes('void') || spellName.includes('death')) {
-      spellType = ANIMATION_CLASSES.SPELL.DARK;
-    }
-    else if (spellEffect === 'buff' || spellName.includes('buff') || 
-             spellName.includes('boost') || spellName.includes('enhance')) {
-      spellType = ANIMATION_CLASSES.SPELL.BUFF;
-    }
-  }
-  
-  // 2. Add casting animation to caster
-  casterElement.classList.add('battle-animation-casting');
-  
-  // 3. Create casting circle effect around caster
-  const castingCircle = document.createElement('div');
-  castingCircle.className = `battle-animation-casting-circle ${spellType}`;
-  
-  // Position casting circle
-  const casterRect = casterElement.getBoundingClientRect();
-  castingCircle.style.position = 'fixed';
-  castingCircle.style.top = `${casterRect.top + (casterRect.height / 2)}px`;
-  castingCircle.style.left = `${casterRect.left + (casterRect.width / 2)}px`;
-  castingCircle.style.transform = 'translate(-50%, -50%)';
-  castingCircle.style.zIndex = '9997';
-  
-  // Add to body
-  document.body.appendChild(castingCircle);
-  
-  // 4. Create projectile after brief casting time
-  setTimeout(() => {
-    // Hide casting circle
-    castingCircle.classList.add('fade-out');
     
-    // Create spell projectile
-    const projectile = document.createElement('div');
-    projectile.className = `battle-animation-spell-projectile ${spellType}`;
+    // 2. Add casting animation to caster
+    casterElement.classList.add('battle-animation-casting');
     
-    // Get caster and target positions
+    // 3. Create casting circle effect around caster
+    const castingCircle = document.createElement('div');
+    castingCircle.className = `battle-animation-casting-circle ${spellVisualType}`;
+    
+    // Position casting circle
     const casterRect = casterElement.getBoundingClientRect();
-    const targetRect = targetElement.getBoundingClientRect();
-    
-    // Position the projectile to start from caster
-    projectile.style.position = 'fixed';
-    projectile.style.top = `${casterRect.top + (casterRect.height / 2)}px`;
-    projectile.style.left = `${casterRect.left + (casterRect.width / 2)}px`;
-    projectile.style.zIndex = '9998';
-    
-    // Calculate target position
-    const targetX = targetRect.left + (targetRect.width / 2);
-    const targetY = targetRect.top + (targetRect.height / 2);
-    
-    // Calculate distance and angle
-    const dx = targetX - (casterRect.left + (casterRect.width / 2));
-    const dy = targetY - (casterRect.top + (casterRect.height / 2));
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    
-    // Set animation properties
-    projectile.style.setProperty('--target-x', `${targetX}px`);
-    projectile.style.setProperty('--target-y', `${targetY}px`);
-    projectile.style.setProperty('--distance', `${distance}px`);
-    projectile.style.setProperty('--angle', `${angle}deg`);
+    castingCircle.style.position = 'fixed';
+    castingCircle.style.top = `${casterRect.top + (casterRect.height / 2)}px`;
+    castingCircle.style.left = `${casterRect.left + (casterRect.width / 2)}px`;
+    castingCircle.style.transform = 'translate(-50%, -50%)';
+    castingCircle.style.zIndex = '9997';
     
     // Add to body
-    document.body.appendChild(projectile);
+    document.body.appendChild(castingCircle);
     
-    // Add animation class
-    projectile.classList.add('animate');
-    
-    // 5. Play impact effect after projectile reaches target
+    // 4. Create projectile after brief casting time
     setTimeout(() => {
-      // Create impact effect
-      const impact = document.createElement('div');
-      impact.className = `battle-animation-spell-impact ${spellType}`;
+      // Hide casting circle
+      castingCircle.classList.add('fade-out');
       
-      // Position impact
-      impact.style.position = 'fixed';
-      impact.style.top = `${targetY}px`;
-      impact.style.left = `${targetX}px`;
-      impact.style.transform = 'translate(-50%, -50%)';
-      impact.style.zIndex = '9998';
+      // Create spell projectile
+      const projectile = document.createElement('div');
+      projectile.className = `battle-animation-spell-projectile ${spellVisualType}`;
+      
+      // Get caster and target positions
+      const casterCurrentRect = casterElement.getBoundingClientRect();
+      const targetRect = targetElement.getBoundingClientRect();
+      
+      // Position the projectile to start from caster
+      projectile.style.position = 'fixed';
+      projectile.style.top = `${casterCurrentRect.top + (casterCurrentRect.height / 2)}px`;
+      projectile.style.left = `${casterCurrentRect.left + (casterCurrentRect.width / 2)}px`;
+      projectile.style.zIndex = '9998';
+      
+      // Calculate target position
+      const targetX = targetRect.left + (targetRect.width / 2);
+      const targetY = targetRect.top + (targetRect.height / 2);
+      
+      // Calculate distance and angle
+      const dx = targetX - (casterCurrentRect.left + (casterCurrentRect.width / 2));
+      const dy = targetY - (casterCurrentRect.top + (casterCurrentRect.height / 2));
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      
+      // Set animation properties
+      projectile.style.setProperty('--target-x', `${targetX}px`);
+      projectile.style.setProperty('--target-y', `${targetY}px`);
+      projectile.style.setProperty('--distance', `${distance}px`);
+      projectile.style.setProperty('--angle', `${angle}deg`);
       
       // Add to body
-      document.body.appendChild(impact);
+      document.body.appendChild(projectile);
       
-      // Add hit effect to target
-      targetElement.classList.add('battle-animation-spell-hit');
+      // Add animation class
+      projectile.classList.add('animate');
       
-      // Show damage number if provided
-      if (damage !== 0) {
-        showDamageNumber(
-          targetElement, 
-          damage, 
-          'magical', 
-          false
-        );
-      }
-      
-      // Clean up impact after animation
+      // 5. Play impact effect after projectile reaches target
       setTimeout(() => {
-        impact.remove();
-        targetElement.classList.remove('battle-animation-spell-hit');
-      }, 500);
-    }, 400); // Time for projectile to reach target
+        // Create impact effect
+        const impact = document.createElement('div');
+        impact.className = `battle-animation-spell-impact ${spellVisualType}`;
+        
+        // Position impact
+        impact.style.position = 'fixed';
+        impact.style.top = `${targetY}px`;
+        impact.style.left = `${targetX}px`;
+        impact.style.transform = 'translate(-50%, -50%)';
+        impact.style.zIndex = '9998';
+        
+        // Add to body
+        document.body.appendChild(impact);
+        
+        // Add hit effect to target
+        targetElement.classList.add('battle-animation-spell-hit');
+        
+        // Show damage number if provided
+        if (damage !== 0) {
+          showDamageNumber(
+            targetElement, 
+            damage, 
+            'magical', 
+            false
+          );
+        }
+        
+        // Clean up impact after animation
+        setTimeout(() => {
+          if (impact && impact.parentNode) {
+            impact.remove();
+          }
+          targetElement.classList.remove('battle-animation-spell-hit');
+        }, 500);
+      }, 400); // Time for projectile to reach target
+      
+      // 6. Clean up projectile
+      setTimeout(() => {
+        if (projectile && projectile.parentNode) {
+          projectile.remove();
+        }
+      }, 500); // Time for projectile animation
+    }, 400); // Initial casting time
     
-    // 6. Clean up projectile
+    // 7. Clean up and callback
     setTimeout(() => {
-      projectile.remove();
-    }, 500); // Time for projectile animation
-  }, 400); // Initial casting time
-  
-  // 7. Clean up and callback
-  setTimeout(() => {
-    castingCircle.remove();
-    casterElement.classList.remove('battle-animation-casting');
+      if (castingCircle && castingCircle.parentNode) {
+        castingCircle.remove();
+      }
+      casterElement.classList.remove('battle-animation-casting');
+      onComplete();
+    }, ANIMATION_DURATIONS.SPELL);
+  } catch (error) {
+    console.error('Error in animateSpell:', error);
     onComplete();
-  }, ANIMATION_DURATIONS.SPELL);
+  }
 };
 
 /**
@@ -500,98 +537,107 @@ export const animateTool = (
     return;
   }
   
-  // 1. Determine tool type based on properties
-  let toolType = ANIMATION_CLASSES.TOOL.DEFAULT;
-  
-  if (tool) {
-    const toolName = (tool.name || '').toLowerCase();
-    const toolEffect = (tool.tool_effect || '').toLowerCase();
-    const toolType = (tool.tool_type || '').toLowerCase();
+  try {
+    // 1. Determine tool type based on properties
+    let toolVisualType = ANIMATION_CLASSES.TOOL.DEFAULT;
     
-    if (toolEffect === 'Shield' || toolName.includes('shield') || 
-        toolName.includes('protect') || toolName.includes('armor')) {
-      toolType = ANIMATION_CLASSES.TOOL.SHIELD;
+    if (tool) {
+      const toolName = (tool.name || '').toLowerCase();
+      const toolEffect = (tool.tool_effect || '').toLowerCase();
+      const toolTypeProperty = (tool.tool_type || '').toLowerCase();
+      
+      if (toolEffect === 'Shield' || toolName.includes('shield') || 
+          toolName.includes('protect') || toolName.includes('armor')) {
+        toolVisualType = ANIMATION_CLASSES.TOOL.SHIELD;
+      }
+      else if (toolEffect === 'Surge' || toolName.includes('damage') || 
+               toolName.includes('attack') || toolName.includes('sword')) {
+        toolVisualType = ANIMATION_CLASSES.TOOL.DAMAGE;
+      }
+      else if (toolTypeProperty === 'stamina' || toolName.includes('heal') || 
+               toolName.includes('regen') || toolName.includes('potion')) {
+        toolVisualType = ANIMATION_CLASSES.TOOL.HEALING;
+      }
+      else if (toolName.includes('buff') || toolName.includes('boost') || 
+               toolName.includes('enhance')) {
+        toolVisualType = ANIMATION_CLASSES.TOOL.BUFF;
+      }
     }
-    else if (toolEffect === 'Surge' || toolName.includes('damage') || 
-             toolName.includes('attack') || toolName.includes('sword')) {
-      toolType = ANIMATION_CLASSES.TOOL.DAMAGE;
-    }
-    else if (toolType === 'stamina' || toolName.includes('heal') || 
-             toolName.includes('regen') || toolName.includes('potion')) {
-      toolType = ANIMATION_CLASSES.TOOL.HEALING;
-    }
-    else if (toolName.includes('buff') || toolName.includes('boost') || 
-             toolName.includes('enhance')) {
-      toolType = ANIMATION_CLASSES.TOOL.BUFF;
-    }
-  }
-  
-  // 2. Create tool icon element
-  const toolIcon = document.createElement('div');
-  toolIcon.className = `battle-animation-tool-icon ${toolType}`;
-  
-  // 3. Position at user
-  const userRect = userElement.getBoundingClientRect();
-  toolIcon.style.position = 'fixed';
-  toolIcon.style.top = `${userRect.top + 20}px`;
-  toolIcon.style.left = `${userRect.left + (userRect.width / 2)}px`;
-  toolIcon.style.transform = 'translate(-50%, -50%) scale(0)';
-  toolIcon.style.zIndex = '9998';
-  
-  // 4. Add to body
-  document.body.appendChild(toolIcon);
-  
-  // 5. Animation sequence
-  
-  // First, scale up the icon
-  setTimeout(() => {
-    toolIcon.style.transition = 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
-    toolIcon.style.transform = 'translate(-50%, -50%) scale(1)';
-  }, 50);
-  
-  // Then float icon to target
-  setTimeout(() => {
-    const targetRect = targetElement.getBoundingClientRect();
-    toolIcon.style.transition = 'all 500ms cubic-bezier(0.22, 1, 0.36, 1)';
-    toolIcon.style.top = `${targetRect.top + 20}px`;
-    toolIcon.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
-  }, 400);
-  
-  // Scale down and apply effect
-  setTimeout(() => {
-    // Add effect to target
-    targetElement.classList.add(`battle-animation-tool-${toolType}-target`);
     
-    // Scale down icon
-    toolIcon.style.transition = 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+    // 2. Create tool icon element
+    const toolIcon = document.createElement('div');
+    toolIcon.className = `battle-animation-tool-icon ${toolVisualType}`;
+    
+    // 3. Position at user
+    const userRect = userElement.getBoundingClientRect();
+    toolIcon.style.position = 'fixed';
+    toolIcon.style.top = `${userRect.top + 20}px`;
+    toolIcon.style.left = `${userRect.left + (userRect.width / 2)}px`;
     toolIcon.style.transform = 'translate(-50%, -50%) scale(0)';
-    toolIcon.style.opacity = '0';
+    toolIcon.style.zIndex = '9998';
     
-    // Create effect aura
-    const effectAura = document.createElement('div');
-    effectAura.className = `battle-animation-tool-effect ${toolType}`;
+    // 4. Add to body
+    document.body.appendChild(toolIcon);
     
-    const targetRect = targetElement.getBoundingClientRect();
-    effectAura.style.position = 'fixed';
-    effectAura.style.top = `${targetRect.top + (targetRect.height / 2)}px`;
-    effectAura.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
-    effectAura.style.transform = 'translate(-50%, -50%)';
-    effectAura.style.zIndex = '9997';
+    // 5. Animation sequence
     
-    document.body.appendChild(effectAura);
-    
-    // Remove effect after animation
+    // First, scale up the icon
     setTimeout(() => {
-      effectAura.remove();
-      targetElement.classList.remove(`battle-animation-tool-${toolType}-target`);
-    }, 500);
-  }, 900);
-  
-  // 6. Clean up and callback
-  setTimeout(() => {
-    toolIcon.remove();
+      toolIcon.style.transition = 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+      toolIcon.style.transform = 'translate(-50%, -50%) scale(1)';
+    }, 50);
+    
+    // Then float icon to target
+    setTimeout(() => {
+      const targetRect = targetElement.getBoundingClientRect();
+      toolIcon.style.transition = 'all 500ms cubic-bezier(0.22, 1, 0.36, 1)';
+      toolIcon.style.top = `${targetRect.top + 20}px`;
+      toolIcon.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
+    }, 400);
+    
+    // Scale down and apply effect
+    setTimeout(() => {
+      // Add effect to target
+      targetElement.classList.add(`battle-animation-tool-${toolVisualType}-target`);
+      
+      // Scale down icon
+      toolIcon.style.transition = 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+      toolIcon.style.transform = 'translate(-50%, -50%) scale(0)';
+      toolIcon.style.opacity = '0';
+      
+      // Create effect aura
+      const effectAura = document.createElement('div');
+      effectAura.className = `battle-animation-tool-effect ${toolVisualType}`;
+      
+      const targetRect = targetElement.getBoundingClientRect();
+      effectAura.style.position = 'fixed';
+      effectAura.style.top = `${targetRect.top + (targetRect.height / 2)}px`;
+      effectAura.style.left = `${targetRect.left + (targetRect.width / 2)}px`;
+      effectAura.style.transform = 'translate(-50%, -50%)';
+      effectAura.style.zIndex = '9997';
+      
+      document.body.appendChild(effectAura);
+      
+      // Remove effect after animation
+      setTimeout(() => {
+        if (effectAura && effectAura.parentNode) {
+          effectAura.remove();
+        }
+        targetElement.classList.remove(`battle-animation-tool-${toolVisualType}-target`);
+      }, 500);
+    }, 900);
+    
+    // 6. Clean up and callback
+    setTimeout(() => {
+      if (toolIcon && toolIcon.parentNode) {
+        toolIcon.remove();
+      }
+      onComplete();
+    }, ANIMATION_DURATIONS.TOOL);
+  } catch (error) {
+    console.error('Error in animateTool:', error);
     onComplete();
-  }, ANIMATION_DURATIONS.TOOL);
+  }
 };
 
 /**
@@ -600,38 +646,44 @@ export const animateTool = (
  * @param {number} turn The new turn number
  */
 export const animateTurnTransition = (activePlayer, turn) => {
-  // Create transition element
-  const transition = document.createElement('div');
-  transition.className = `battle-animation-turn-transition ${activePlayer}`;
-  
-  // Add turn indicator
-  transition.innerHTML = `
-    <div class="battle-animation-turn-number">Turn ${turn}</div>
-    <div class="battle-animation-turn-player">${activePlayer === 'player' ? 'Your Turn' : 'Enemy Turn'}</div>
-  `;
-  
-  // Add to body
-  transition.style.position = 'fixed';
-  transition.style.top = '0';
-  transition.style.left = '0';
-  transition.style.width = '100%';
-  transition.style.height = '100%';
-  transition.style.display = 'flex';
-  transition.style.flexDirection = 'column';
-  transition.style.justifyContent = 'center';
-  transition.style.alignItems = 'center';
-  transition.style.pointerEvents = 'none';
-  transition.style.zIndex = '9999';
-  
-  document.body.appendChild(transition);
-  
-  // Remove after animation
-  setTimeout(() => {
-    transition.classList.add('fade-out');
+  try {
+    // Create transition element
+    const transition = document.createElement('div');
+    transition.className = `battle-animation-turn-transition ${activePlayer}`;
+    
+    // Add turn indicator
+    transition.innerHTML = `
+      <div class="battle-animation-turn-number">Turn ${turn}</div>
+      <div class="battle-animation-turn-player">${activePlayer === 'player' ? 'Your Turn' : 'Enemy Turn'}</div>
+    `;
+    
+    // Add to body
+    transition.style.position = 'fixed';
+    transition.style.top = '0';
+    transition.style.left = '0';
+    transition.style.width = '100%';
+    transition.style.height = '100%';
+    transition.style.display = 'flex';
+    transition.style.flexDirection = 'column';
+    transition.style.justifyContent = 'center';
+    transition.style.alignItems = 'center';
+    transition.style.pointerEvents = 'none';
+    transition.style.zIndex = '9999';
+    
+    document.body.appendChild(transition);
+    
+    // Remove after animation
     setTimeout(() => {
-      transition.remove();
-    }, 300);
-  }, ANIMATION_DURATIONS.TURN_TRANSITION - 300);
+      transition.classList.add('fade-out');
+      setTimeout(() => {
+        if (transition && transition.parentNode) {
+          transition.remove();
+        }
+      }, 300);
+    }, ANIMATION_DURATIONS.TURN_TRANSITION - 300);
+  } catch (error) {
+    console.error('Error in animateTurnTransition:', error);
+  }
 };
 
 /**
@@ -647,42 +699,49 @@ export const showAIThinking = (enemyElement, isComplex = false, onComplete = () 
     return;
   }
   
-  // Create thinking indicator
-  const thinking = document.createElement('div');
-  thinking.className = 'battle-animation-ai-thinking';
-  
-  // Add dots
-  for (let i = 0; i < 3; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'battle-animation-ai-thinking-dot';
-    thinking.appendChild(dot);
-  }
-  
-  // Position above enemy
-  const rect = enemyElement.getBoundingClientRect();
-  thinking.style.position = 'fixed';
-  thinking.style.top = `${rect.top - 20}px`;
-  thinking.style.left = `${rect.left + (rect.width / 2)}px`;
-  thinking.style.transform = 'translate(-50%, -50%)';
-  thinking.style.zIndex = '9998';
-  
-  // Add to body
-  document.body.appendChild(thinking);
-  
-  // Highlight enemy card
-  enemyElement.classList.add('battle-animation-ai-active');
-  
-  // Calculate duration based on complexity
-  const duration = isComplex ? 
-    ANIMATION_DURATIONS.AI_THINKING.COMPLEX : 
-    ANIMATION_DURATIONS.AI_THINKING.NORMAL;
-  
-  // Clean up and callback
-  setTimeout(() => {
-    thinking.remove();
-    enemyElement.classList.remove('battle-animation-ai-active');
+  try {
+    // Create thinking indicator
+    const thinking = document.createElement('div');
+    thinking.className = 'battle-animation-ai-thinking';
+    
+    // Add dots
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'battle-animation-ai-thinking-dot';
+      thinking.appendChild(dot);
+    }
+    
+    // Position above enemy
+    const rect = enemyElement.getBoundingClientRect();
+    thinking.style.position = 'fixed';
+    thinking.style.top = `${rect.top - 20}px`;
+    thinking.style.left = `${rect.left + (rect.width / 2)}px`;
+    thinking.style.transform = 'translate(-50%, -50%)';
+    thinking.style.zIndex = '9998';
+    
+    // Add to body
+    document.body.appendChild(thinking);
+    
+    // Highlight enemy card
+    enemyElement.classList.add('battle-animation-ai-active');
+    
+    // Calculate duration based on complexity
+    const duration = isComplex ? 
+      ANIMATION_DURATIONS.AI_THINKING.COMPLEX : 
+      ANIMATION_DURATIONS.AI_THINKING.NORMAL;
+    
+    // Clean up and callback
+    setTimeout(() => {
+      if (thinking && thinking.parentNode) {
+        thinking.remove();
+      }
+      enemyElement.classList.remove('battle-animation-ai-active');
+      onComplete();
+    }, duration);
+  } catch (error) {
+    console.error('Error in showAIThinking:', error);
     onComplete();
-  }, duration);
+  }
 };
 
 /**
@@ -692,38 +751,44 @@ export const showAIThinking = (enemyElement, isComplex = false, onComplete = () 
  * @param {number} intensity Flash opacity (0.0-1.0)
  */
 export const screenFlash = (color = '#fff', duration = 300, intensity = 0.3) => {
-  // Create flash element
-  const flash = document.createElement('div');
-  flash.className = 'battle-animation-screen-flash';
-  
-  // Set style
-  flash.style.position = 'fixed';
-  flash.style.top = '0';
-  flash.style.left = '0';
-  flash.style.width = '100%';
-  flash.style.height = '100%';
-  flash.style.backgroundColor = color;
-  flash.style.opacity = '0';
-  flash.style.pointerEvents = 'none';
-  flash.style.zIndex = '9996';
-  
-  // Add to body
-  document.body.appendChild(flash);
-  
-  // Animate
-  requestAnimationFrame(() => {
-    flash.style.transition = `opacity ${duration / 2}ms ease-in`;
-    flash.style.opacity = intensity.toString();
+  try {
+    // Create flash element
+    const flash = document.createElement('div');
+    flash.className = 'battle-animation-screen-flash';
     
-    setTimeout(() => {
-      flash.style.transition = `opacity ${duration / 2}ms ease-out`;
-      flash.style.opacity = '0';
+    // Set style
+    flash.style.position = 'fixed';
+    flash.style.top = '0';
+    flash.style.left = '0';
+    flash.style.width = '100%';
+    flash.style.height = '100%';
+    flash.style.backgroundColor = color;
+    flash.style.opacity = '0';
+    flash.style.pointerEvents = 'none';
+    flash.style.zIndex = '9996';
+    
+    // Add to body
+    document.body.appendChild(flash);
+    
+    // Animate
+    requestAnimationFrame(() => {
+      flash.style.transition = `opacity ${duration / 2}ms ease-in`;
+      flash.style.opacity = intensity.toString();
       
       setTimeout(() => {
-        flash.remove();
+        flash.style.transition = `opacity ${duration / 2}ms ease-out`;
+        flash.style.opacity = '0';
+        
+        setTimeout(() => {
+          if (flash && flash.parentNode) {
+            flash.remove();
+          }
+        }, duration / 2);
       }, duration / 2);
-    }, duration / 2);
-  });
+    });
+  } catch (error) {
+    console.error('Error in screenFlash:', error);
+  }
 };
 
 /**
@@ -732,23 +797,27 @@ export const screenFlash = (color = '#fff', duration = 300, intensity = 0.3) => 
  * @param {number} duration Shake duration in ms
  */
 export const shakeScreen = (intensity = 5, duration = 500) => {
-  // Get the battlefield element
-  const battlefield = document.querySelector('.battlefield');
-  if (!battlefield) return;
-  
-  // Scale intensity to reasonable pixels
-  const pixelIntensity = Math.min(10, Math.max(1, intensity)) * 1.5;
-  
-  // Apply shake animation
-  battlefield.style.animation = `battle-animation-shake ${duration}ms ease-in-out`;
-  
-  // Set shake intensity via CSS vars
-  battlefield.style.setProperty('--shake-intensity', `${pixelIntensity}px`);
-  
-  // Reset after animation completes
-  setTimeout(() => {
-    battlefield.style.animation = '';
-  }, duration);
+  try {
+    // Get the battlefield element
+    const battlefield = document.querySelector('.battlefield');
+    if (!battlefield) return;
+    
+    // Scale intensity to reasonable pixels
+    const pixelIntensity = Math.min(10, Math.max(1, intensity)) * 1.5;
+    
+    // Apply shake animation
+    battlefield.style.animation = `battle-animation-shake ${duration}ms ease-in-out`;
+    
+    // Set shake intensity via CSS vars
+    battlefield.style.setProperty('--shake-intensity', `${pixelIntensity}px`);
+    
+    // Reset after animation completes
+    setTimeout(() => {
+      battlefield.style.animation = '';
+    }, duration);
+  } catch (error) {
+    console.error('Error in shakeScreen:', error);
+  }
 };
 
 /**
@@ -760,61 +829,69 @@ export const shakeScreen = (intensity = 5, duration = 500) => {
 export const generateParticles = (targetElement, particleType = 'damage', count = 10) => {
   if (!targetElement) return;
   
-  const rect = targetElement.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-  
-  // Create particle container
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '100%';
-  container.style.height = '100%';
-  container.style.pointerEvents = 'none';
-  container.style.zIndex = '9995';
-  
-  document.body.appendChild(container);
-  
-  // Generate particles
-  for (let i = 0; i < count; i++) {
-    const particle = document.createElement('div');
-    particle.className = `battle-animation-particle ${particleType}`;
+  try {
+    const rect = targetElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
     
-    // Randomize particle properties
-    const angle = Math.random() * 360;
-    const distance = Math.random() * 50 + 20;
-    const size = Math.random() * 8 + 4;
-    const duration = Math.random() * 1000 + 500;
+    // Create particle container
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.top = '0';
+    container.style.left = '0';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.pointerEvents = 'none';
+    container.style.zIndex = '9995';
     
-    // Set initial position
-    particle.style.position = 'absolute';
-    particle.style.top = `${centerY}px`;
-    particle.style.left = `${centerX}px`;
-    particle.style.width = `${size}px`;
-    particle.style.height = `${size}px`;
+    document.body.appendChild(container);
     
-    // Set animation properties
-    particle.style.setProperty('--angle', `${angle}deg`);
-    particle.style.setProperty('--distance', `${distance}px`);
-    particle.style.setProperty('--duration', `${duration}ms`);
+    // Generate particles
+    for (let i = 0; i < count; i++) {
+      const particle = document.createElement('div');
+      particle.className = `battle-animation-particle ${particleType}`;
+      
+      // Randomize particle properties
+      const angle = Math.random() * 360;
+      const distance = Math.random() * 50 + 20;
+      const size = Math.random() * 8 + 4;
+      const duration = Math.random() * 1000 + 500;
+      
+      // Set initial position
+      particle.style.position = 'absolute';
+      particle.style.top = `${centerY}px`;
+      particle.style.left = `${centerX}px`;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      
+      // Set animation properties
+      particle.style.setProperty('--angle', `${angle}deg`);
+      particle.style.setProperty('--distance', `${distance}px`);
+      particle.style.setProperty('--duration', `${duration}ms`);
+      
+      // Add to container
+      container.appendChild(particle);
+      
+      // Add animation class
+      particle.classList.add('animate');
+      
+      // Remove after animation
+      setTimeout(() => {
+        if (particle && particle.parentNode) {
+          particle.remove();
+        }
+      }, duration);
+    }
     
-    // Add to container
-    container.appendChild(particle);
-    
-    // Add animation class
-    particle.classList.add('animate');
-    
-    // Remove after animation
+    // Clean up container after all particles are gone
     setTimeout(() => {
-      particle.remove();
-    }, duration);
+      if (container && container.parentNode) {
+        container.remove();
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('Error in generateParticles:', error);
   }
-  
-  // Clean up container after all particles are gone
-  setTimeout(() => {
-    container.remove();
-  }, 2000);
 };
 
 /**
@@ -838,7 +915,12 @@ export const getCreatureElement = (creatureId, isEnemy = false) => {
 export const animateWithTiming = (animationFunction, delay = 0) => {
   return new Promise(resolve => {
     setTimeout(() => {
-      animationFunction(() => resolve());
+      try {
+        animationFunction(() => resolve());
+      } catch (error) {
+        console.error('Error in animateWithTiming:', error);
+        resolve();
+      }
     }, delay);
   });
 };
@@ -855,5 +937,7 @@ export default {
   shakeScreen,
   generateParticles,
   getCreatureElement,
-  animateWithTiming
+  animateWithTiming,
+  ANIMATION_DURATIONS,
+  ANIMATION_CLASSES
 };
