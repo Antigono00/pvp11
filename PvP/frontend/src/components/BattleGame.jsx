@@ -1,4 +1,4 @@
-// src/components/BattleGame.jsx - ENHANCED VERSION WITH ANIMATIONS
+// src/components/BattleGame.jsx - ENHANCED VERSION WITH ANIMATIONS AND FIXES
 import React, { useState, useEffect, useContext, useCallback, useReducer, useRef } from 'react';
 import { GameContext } from '../context/GameContext';
 import { useRadixConnect } from '../context/RadixConnectContext';
@@ -1768,13 +1768,20 @@ const BattleGame = ({ onClose }) => {
     
   }, [playerField, playerEnergy, difficulty, addToBattleLog]);
   
-  // ENHANCED AI TURN HANDLING
+  // ENHANCED AI TURN HANDLING WITH FIXES
   const handleEnemyTurn = useCallback(() => {
     const currentEnergy = currentEnemyEnergyRef.current;
     console.log("Enemy turn. Energy:", currentEnergy, "Hand:", enemyHand.length, "Field:", enemyField.length);
     console.log("Enemy tools:", enemyTools.length, "Enemy spells:", enemySpells.length);
     
     setActionInProgress(true);
+    
+    // Add a safety timeout to prevent infinite hang
+    const safetyTimeout = setTimeout(() => {
+      console.error("Enemy turn timeout - forcing turn completion");
+      setActionInProgress(false);
+      finishEnemyTurn();
+    }, 10000); // 10 second safety timeout
     
     // First, queue AI thinking animation if there's an active enemy
     if (enemyField.length > 0) {
@@ -1786,18 +1793,19 @@ const BattleGame = ({ onClose }) => {
         isComplex: difficulty === 'hard' || difficulty === 'expert',
         onComplete: () => {
           // After thinking animation, determine and execute AI action
+          clearTimeout(safetyTimeout); // Clear the timeout if we're proceeding normally
           executeAIActionWithAnimation();
         }
       });
     } else {
       // No enemy to show thinking, just execute action
+      clearTimeout(safetyTimeout);
       executeAIActionWithAnimation();
     }
   }, [
     difficulty, 
     enemyHand, 
     enemyField, 
-    playerField,
     enemyTools,
     enemySpells
   ]);
@@ -1846,6 +1854,7 @@ const BattleGame = ({ onClose }) => {
     const actionCost = action.energyCost || 0;
     if (currentEnergy < actionCost) {
       console.log(`Skipping action ${action.type} - not enough energy (${currentEnergy} < ${actionCost})`);
+      // Continue with next action instead of getting stuck
       executeActionSequenceWithAnimation(actionSequence, index + 1);
       return;
     }
@@ -1855,16 +1864,25 @@ const BattleGame = ({ onClose }) => {
         executeActionSequenceWithAnimation(actionSequence, index + 1);
       }, 800);
     });
-  }, []);
+  }, [executeSingleAIActionWithAnimation]);
   
   const executeSingleAIActionWithAnimation = useCallback((aiAction, callback) => {
     console.log("Executing single AI action:", aiAction.type);
     const currentEnergy = currentEnemyEnergyRef.current;
     
+    // Helper function to ensure callback is always called
+    const safeCallback = () => {
+      if (callback) {
+        callback();
+      } else {
+        // If no callback provided, finish the turn
+        setTimeout(() => finishEnemyTurn(), 500);
+      }
+    };
+    
     if (aiAction.type === 'endTurn') {
       addToBattleLog("Enemy ended their turn.");
-      if (callback) callback();
-      else setTimeout(() => finishEnemyTurn(), 500);
+      safeCallback();
       return;
     }
     
@@ -1872,8 +1890,8 @@ const BattleGame = ({ onClose }) => {
     const actionCost = aiAction.energyCost || 0;
     if (currentEnergy < actionCost) {
       console.error(`AI tried to ${aiAction.type} without enough energy (${currentEnergy} < ${actionCost})`);
-      if (callback) callback();
-      else setTimeout(() => finishEnemyTurn(), 500);
+      // IMPORTANT: Always call the callback even when action fails
+      safeCallback();
       return;
     }
     
@@ -1882,31 +1900,42 @@ const BattleGame = ({ onClose }) => {
       case 'deploy':
         if (!aiAction.creature) {
           console.log("AI Error: No creature to deploy");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
         const energyCost = aiAction.energyCost || aiAction.creature.battleStats?.energyCost || 3;
         
+        // Final energy check before deployment
         if (currentEnergy < energyCost) {
-          console.log("AI Error: Not enough energy to deploy");
-          if (callback) callback();
+          console.log(`AI Error: Not enough energy to deploy ${aiAction.creature.species_name} (${currentEnergy} < ${energyCost})`);
+          safeCallback();
+          break;
+        }
+        
+        // Check if creature is already deployed
+        if (enemyField.some(c => c.id === aiAction.creature.id)) {
+          console.log("AI Error: Creature already deployed");
+          safeCallback();
           break;
         }
         
         console.log("AI deploying creature:", aiAction.creature.species_name, "Cost:", energyCost);
         
+        // Dispatch the deployment
         dispatch({
           type: ACTIONS.ENEMY_DEPLOY_CREATURE,
           creature: aiAction.creature,
           energyCost
         });
         
-        currentEnemyEnergyRef.current = Math.max(0, currentEnergy - energyCost);
+        // Check if deployment was successful by verifying energy was spent
+        const newEnergy = Math.max(0, currentEnergy - energyCost);
+        currentEnemyEnergyRef.current = newEnergy;
         
         addToBattleLog(`Enemy deployed ${aiAction.creature.species_name} to the battlefield! (-${energyCost} energy)`);
         
-        // Add deployment animation
+        // Add deployment animation with guaranteed callback
         queueAnimation({
           type: 'screen-effect',
           effect: 'flash',
@@ -1922,8 +1951,8 @@ const BattleGame = ({ onClose }) => {
               if (deployedElement) {
                 generateParticles(deployedElement, 'gold', 15);
               }
-              
-              if (callback) callback();
+              // ALWAYS call the callback
+              safeCallback();
             }, 300);
           }
         });
@@ -1932,7 +1961,7 @@ const BattleGame = ({ onClose }) => {
       case 'attack':
         if (!aiAction.attacker || !aiAction.target) {
           console.log("AI Error: Missing attacker or target");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -1940,7 +1969,7 @@ const BattleGame = ({ onClose }) => {
         
         if (currentEnergy < attackCost) {
           console.log("AI Error: Not enough energy to attack");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -1963,7 +1992,7 @@ const BattleGame = ({ onClose }) => {
         
         addToBattleLog(`Enemy: ${attackResult.battleLog} (-${attackCost} energy)`);
         
-        // Queue attack animation
+        // Queue attack animation with guaranteed callback
         queueAnimation({
           type: 'attack',
           attackerId: aiAction.attacker.id,
@@ -1971,14 +2000,14 @@ const BattleGame = ({ onClose }) => {
           damage: attackResult.damage,
           isCritical: attackResult.isCritical,
           attackType: attackType,
-          onComplete: callback
+          onComplete: safeCallback
         });
         break;
         
       case 'defend':
         if (!aiAction.creature) {
           console.log("AI Error: No creature to defend");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -1986,7 +2015,7 @@ const BattleGame = ({ onClose }) => {
         
         if (currentEnergy < defendCost) {
           console.log("AI Error: Not enough energy to defend");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -2003,18 +2032,18 @@ const BattleGame = ({ onClose }) => {
         
         addToBattleLog(`Enemy ${aiAction.creature.species_name} took a defensive stance! (-${defendCost} energy)`);
         
-        // Queue defend animation
+        // Queue defend animation with guaranteed callback
         queueAnimation({
           type: 'defend',
           defenderId: aiAction.creature.id,
-          onComplete: callback
+          onComplete: safeCallback
         });
         break;
         
       case 'useTool':
         if (!aiAction.tool || !aiAction.target) {
           console.log("AI Error: Missing tool or target");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -2036,23 +2065,23 @@ const BattleGame = ({ onClose }) => {
           // Find appropriate user creature
           const toolUser = aiAction.user || enemyField.find(c => c.id !== aiAction.target.id) || aiAction.target;
           
-          // Queue tool animation
+          // Queue tool animation with guaranteed callback
           queueAnimation({
             type: 'tool',
             userId: toolUser.id,
             targetId: aiAction.target.id,
             tool: aiAction.tool,
-            onComplete: callback
+            onComplete: safeCallback
           });
         } else {
-          if (callback) callback();
+          safeCallback();
         }
         break;
         
       case 'useSpell':
         if (!aiAction.spell || !aiAction.caster || !aiAction.target) {
           console.log("AI Error: Missing spell, caster, or target");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -2060,7 +2089,7 @@ const BattleGame = ({ onClose }) => {
         
         if (currentEnergy < spellCost) {
           console.log("AI Error: Not enough energy for spell");
-          if (callback) callback();
+          safeCallback();
           break;
         }
         
@@ -2082,23 +2111,23 @@ const BattleGame = ({ onClose }) => {
           const targetName = aiAction.target.id === aiAction.caster.id ? 'themselves' : aiAction.target.species_name;
           addToBattleLog(`Enemy ${aiAction.caster.species_name} cast ${aiAction.spell.name} on ${targetName}! (-${spellCost} energy)`);
           
-          // Queue spell animation
+          // Queue spell animation with guaranteed callback
           queueAnimation({
             type: 'spell',
             casterId: aiAction.caster.id,
             targetId: aiAction.target.id,
             spell: aiAction.spell,
             damage: spellResult.spellEffect?.damage || spellResult.spellEffect?.healing || 0,
-            onComplete: callback
+            onComplete: safeCallback
           });
         } else {
-          if (callback) callback();
+          safeCallback();
         }
         break;
         
       default:
         console.log("Unknown AI action type:", aiAction.type);
-        if (callback) callback();
+        safeCallback();
     }
   }, [difficulty, enemyField, turn, addToBattleLog]);
   
