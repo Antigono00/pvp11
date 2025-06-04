@@ -1011,6 +1011,267 @@ const BattleGame = ({ onClose }) => {
     lastDefend
   } = state;
   
+  // ===== START OF REF-BASED ANIMATION FIX =====
+  // Use refs to store animation functions to break circular dependencies
+  const animationFunctionsRef = useRef({});
+
+  // Store animation queue processor functions in refs
+  const executeAnimationRef = useRef();
+  const queueAnimationRef = useRef();
+
+  // Define queueAnimation using ref to avoid circular dependency
+  queueAnimationRef.current = (animation) => {
+    dispatch({
+      type: ACTIONS.QUEUE_ANIMATION,
+      animation
+    });
+  };
+
+  // Define a stable queueAnimation function that uses the ref
+  const queueAnimation = useCallback((animation) => {
+    queueAnimationRef.current(animation);
+  }, []);
+
+  // Helper to get creature element - define early since it doesn't have dependencies
+  const getCreatureElement = useCallback((creatureId, isEnemy) => {
+    if (isEnemy) {
+      return creatureElementsRef.current.enemy[creatureId];
+    } else {
+      return creatureElementsRef.current.player[creatureId];
+    }
+  }, []);
+
+  // Define all animation execution functions and store them in ref
+  animationFunctionsRef.current = {
+    executeAttackAnimation: async (animation) => {
+      const { attackerId, targetId, damage, isCritical, attackType } = animation;
+      const isEnemyAttacker = enemyField.some(c => c.id === attackerId);
+      const isEnemyTarget = enemyField.some(c => c.id === targetId);
+      
+      const attackerElement = getCreatureElement(attackerId, isEnemyAttacker);
+      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      
+      if (!attackerElement || !targetElement) {
+        console.log("Missing elements for attack animation");
+        return;
+      }
+      
+      return new Promise(resolve => {
+        animateAttack(
+          attackerElement,
+          targetElement,
+          attackType || 'physical',
+          isCritical || false,
+          damage || 0,
+          () => {
+            if (damage && damage > 20) {
+              const intensity = Math.min(10, Math.max(1, damage / 10));
+              shakeScreen(intensity);
+            }
+            
+            if (damage && damage > 0) {
+              generateParticles(targetElement, 'damage', Math.min(20, damage / 3));
+            }
+            
+            resolve();
+          }
+        );
+      });
+    },
+    
+    executeDefendAnimation: async (animation) => {
+      const { defenderId } = animation;
+      const isEnemyDefender = enemyField.some(c => c.id === defenderId);
+      
+      const defenderElement = getCreatureElement(defenderId, isEnemyDefender);
+      
+      if (!defenderElement) {
+        console.log("Missing element for defend animation");
+        return;
+      }
+      
+      return new Promise(resolve => {
+        animateDefend(defenderElement, resolve);
+      });
+    },
+    
+    executeSpellAnimation: async (animation) => {
+      const { casterId, targetId, spell, damage } = animation;
+      const isEnemyCaster = enemyField.some(c => c.id === casterId);
+      const isEnemyTarget = enemyField.some(c => c.id === targetId);
+      
+      const casterElement = getCreatureElement(casterId, isEnemyCaster);
+      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      
+      if (!casterElement || !targetElement) {
+        console.log("Missing elements for spell animation");
+        return;
+      }
+      
+      return new Promise(resolve => {
+        animateSpell(
+          casterElement,
+          targetElement,
+          spell,
+          damage,
+          () => {
+            if (damage && Math.abs(damage) > 25) {
+              let flashColor;
+              if (damage < 0) {
+                flashColor = 'rgba(0, 255, 0, 0.2)';
+              } else {
+                flashColor = 'rgba(255, 0, 255, 0.2)';
+              }
+              screenFlash(flashColor);
+            }
+            
+            if (damage) {
+              if (damage < 0) {
+                generateParticles(targetElement, 'heal', Math.min(20, Math.abs(damage) / 2));
+              } else {
+                generateParticles(targetElement, 'magic', Math.min(20, damage / 3));
+              }
+            }
+            
+            resolve();
+          }
+        );
+      });
+    },
+    
+    executeToolAnimation: async (animation) => {
+      const { userId, targetId, tool } = animation;
+      const isEnemyUser = enemyField.some(c => c.id === userId);
+      const isEnemyTarget = enemyField.some(c => c.id === targetId);
+      
+      const userElement = getCreatureElement(userId, isEnemyUser);
+      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      
+      if (!userElement || !targetElement) {
+        console.log("Missing elements for tool animation");
+        return;
+      }
+      
+      return new Promise(resolve => {
+        animateTool(userElement, targetElement, tool, resolve);
+      });
+    },
+    
+    executeTurnTransitionAnimation: async (animation) => {
+      const { player, turnNumber } = animation;
+      
+      animateTurnTransition(player, turnNumber);
+      
+      return new Promise(resolve => {
+        setTimeout(resolve, ANIMATION_DURATIONS.TURN_TRANSITION);
+      });
+    },
+    
+    executeAIThinkingAnimation: async (animation) => {
+      const { enemyId, isComplex } = animation;
+      const enemyElement = getCreatureElement(enemyId, true);
+      
+      if (!enemyElement) {
+        console.log("Missing element for AI thinking animation");
+        return Promise.resolve();
+      }
+      
+      return new Promise(resolve => {
+        showAIThinking(enemyElement, isComplex, resolve);
+      });
+    },
+    
+    executeScreenEffectAnimation: async (animation) => {
+      const { effect, params } = animation;
+      
+      switch (effect) {
+        case 'flash':
+          screenFlash(params.color, params.duration, params.intensity);
+          break;
+        case 'shake':
+          shakeScreen(params.intensity, params.duration);
+          break;
+        case 'particles':
+          const targetElement = document.querySelector(params.selector);
+          if (targetElement) {
+            generateParticles(targetElement, params.particleType, params.count);
+          }
+          break;
+      }
+      
+      return new Promise(resolve => {
+        setTimeout(resolve, params.duration || 500);
+      });
+    }
+  };
+
+  // Main execute animation function using ref
+  executeAnimationRef.current = async (animation) => {
+    if (!animation) return;
+    
+    if (animation.delay) {
+      await new Promise(resolve => setTimeout(resolve, animation.delay));
+    }
+    
+    const animationFunctions = animationFunctionsRef.current;
+    
+    switch (animation.type) {
+      case 'attack':
+        await animationFunctions.executeAttackAnimation(animation);
+        break;
+      case 'defend':
+        await animationFunctions.executeDefendAnimation(animation);
+        break;
+      case 'spell':
+        await animationFunctions.executeSpellAnimation(animation);
+        break;
+      case 'tool':
+        await animationFunctions.executeToolAnimation(animation);
+        break;
+      case 'turn-transition':
+        await animationFunctions.executeTurnTransitionAnimation(animation);
+        break;
+      case 'ai-thinking':
+        await animationFunctions.executeAIThinkingAnimation(animation);
+        break;
+      case 'screen-effect':
+        await animationFunctions.executeScreenEffectAnimation(animation);
+        break;
+      default:
+        console.log(`Unknown animation type: ${animation.type}`);
+    }
+    
+    if (animation.onComplete) {
+      animation.onComplete();
+    }
+  };
+
+  // Animation queue processor - now uses refs to avoid circular dependencies
+  useEffect(() => {
+    if (animationQueue.length === 0 || animationInProgress) {
+      return;
+    }
+    
+    const processNextAnimation = async () => {
+      dispatch({ type: ACTIONS.SET_ANIMATION_IN_PROGRESS, inProgress: true });
+      
+      const animation = animationQueue[0];
+      console.log('Processing animation:', animation.type);
+      
+      try {
+        await executeAnimationRef.current(animation);
+      } catch (error) {
+        console.error("Animation error:", error);
+      }
+      
+      dispatch({ type: ACTIONS.DEQUEUE_ANIMATION });
+      dispatch({ type: ACTIONS.SET_ANIMATION_IN_PROGRESS, inProgress: false });
+    };
+    
+    processNextAnimation();
+  }, [animationQueue.length, animationInProgress]);
+  // ===== END OF REF-BASED ANIMATION FIX =====
+  
   // Browser compatibility fixes
   useEffect(() => {
     const { browser, isMobile } = getBrowserInfo();
@@ -1131,6 +1392,23 @@ const BattleGame = ({ onClose }) => {
     }
   }, []);
   
+  // INITIALIZATION
+  useEffect(() => {
+    if (creatureNfts && creatureNfts.length > 0) {
+      const battleCreatures = creatureNfts.map(creature => {
+        const derivedStats = calculateDerivedStats(creature);
+        
+        return {
+          ...creature,
+          battleStats: derivedStats,
+          currentHealth: derivedStats.maxHealth,
+          activeEffects: [],
+          isDefending: false
+        };
+      });
+    }
+  }, [creatureNfts]);
+  
   // New: Manage creature elements for animations
   useEffect(() => {
     // Get all creature elements and store references
@@ -1164,276 +1442,6 @@ const BattleGame = ({ onClose }) => {
     const timeout = setTimeout(getCreatureElements, 100);
     return () => clearTimeout(timeout);
   }, [playerField, enemyField]);
-  
-  // New: Animation queue processor
-  useEffect(() => {
-    const processAnimationQueue = async () => {
-      if (animationQueue.length > 0 && !animationInProgress) {
-        dispatch({ type: ACTIONS.SET_ANIMATION_IN_PROGRESS, inProgress: true });
-        
-        const animation = animationQueue[0];
-        
-        try {
-          // Process animation based on type
-          await executeAnimation(animation);
-        } catch (error) {
-          console.error("Animation error:", error);
-        }
-        
-        // Remove this animation from queue
-        dispatch({ type: ACTIONS.DEQUEUE_ANIMATION });
-        dispatch({ type: ACTIONS.SET_ANIMATION_IN_PROGRESS, inProgress: false });
-      }
-    };
-    
-    processAnimationQueue();
-  }, [animationQueue, animationInProgress]);
-  
-  // INITIALIZATION
-  useEffect(() => {
-    if (creatureNfts && creatureNfts.length > 0) {
-      const battleCreatures = creatureNfts.map(creature => {
-        const derivedStats = calculateDerivedStats(creature);
-        
-        return {
-          ...creature,
-          battleStats: derivedStats,
-          currentHealth: derivedStats.maxHealth,
-          activeEffects: [],
-          isDefending: false
-        };
-      });
-    }
-  }, [creatureNfts]);
-  
-  // Helper to get creature element
-  const getCreatureElement = (creatureId, isEnemy) => {
-    if (isEnemy) {
-      return creatureElementsRef.current.enemy[creatureId];
-    } else {
-      return creatureElementsRef.current.player[creatureId];
-    }
-  };
-  
-  // New: Execute a specific animation
-  const executeAnimation = async (animation) => {
-    if (!animation) return;
-    
-    // Wait for any provided delay
-    if (animation.delay) {
-      await new Promise(resolve => setTimeout(resolve, animation.delay));
-    }
-    
-    switch (animation.type) {
-      case 'attack':
-        await executeAttackAnimation(animation);
-        break;
-      case 'defend':
-        await executeDefendAnimation(animation);
-        break;
-      case 'spell':
-        await executeSpellAnimation(animation);
-        break;
-      case 'tool':
-        await executeToolAnimation(animation);
-        break;
-      case 'turn-transition':
-        await executeTurnTransitionAnimation(animation);
-        break;
-      case 'ai-thinking':
-        await executeAIThinkingAnimation(animation);
-        break;
-      case 'screen-effect':
-        await executeScreenEffectAnimation(animation);
-        break;
-      default:
-        console.log(`Unknown animation type: ${animation.type}`);
-    }
-    
-    // Execute callback if provided
-    if (animation.onComplete) {
-      animation.onComplete();
-    }
-  };
-  
-  // Execute specific animation types
-  const executeAttackAnimation = async (animation) => {
-    const { attackerId, targetId, damage, isCritical, attackType } = animation;
-    const isEnemyAttacker = enemyField.some(c => c.id === attackerId);
-    const isEnemyTarget = enemyField.some(c => c.id === targetId);
-    
-    const attackerElement = getCreatureElement(attackerId, isEnemyAttacker);
-    const targetElement = getCreatureElement(targetId, isEnemyTarget);
-    
-    if (!attackerElement || !targetElement) {
-      console.log("Missing elements for attack animation");
-      return;
-    }
-    
-    return new Promise(resolve => {
-      // Execute attack animation
-      animateAttack(
-        attackerElement,
-        targetElement,
-        attackType || 'physical',
-        isCritical || false,
-        damage || 0,
-        () => {
-          // If damage is significant, shake the screen
-          if (damage && damage > 20) {
-            // Higher damage = more intense shake
-            const intensity = Math.min(10, Math.max(1, damage / 10));
-            shakeScreen(intensity);
-          }
-          
-          // Generate particles for emphasis
-          if (damage && damage > 0) {
-            generateParticles(targetElement, 'damage', Math.min(20, damage / 3));
-          }
-          
-          resolve();
-        }
-      );
-    });
-  };
-  
-  const executeDefendAnimation = async (animation) => {
-    const { defenderId } = animation;
-    const isEnemyDefender = enemyField.some(c => c.id === defenderId);
-    
-    const defenderElement = getCreatureElement(defenderId, isEnemyDefender);
-    
-    if (!defenderElement) {
-      console.log("Missing element for defend animation");
-      return;
-    }
-    
-    return new Promise(resolve => {
-      animateDefend(defenderElement, resolve);
-    });
-  };
-  
-  const executeSpellAnimation = async (animation) => {
-    const { casterId, targetId, spell, damage } = animation;
-    const isEnemyCaster = enemyField.some(c => c.id === casterId);
-    const isEnemyTarget = enemyField.some(c => c.id === targetId);
-    
-    const casterElement = getCreatureElement(casterId, isEnemyCaster);
-    const targetElement = getCreatureElement(targetId, isEnemyTarget);
-    
-    if (!casterElement || !targetElement) {
-      console.log("Missing elements for spell animation");
-      return;
-    }
-    
-    return new Promise(resolve => {
-      animateSpell(
-        casterElement,
-        targetElement,
-        spell,
-        damage,
-        () => {
-          // Flash the screen for big spells
-          if (damage && Math.abs(damage) > 25) {
-            let flashColor;
-            if (damage < 0) {
-              flashColor = 'rgba(0, 255, 0, 0.2)'; // Green for healing
-            } else {
-              flashColor = 'rgba(255, 0, 255, 0.2)'; // Purple for damage spells
-            }
-            screenFlash(flashColor);
-          }
-          
-          // Generate particles
-          if (damage) {
-            if (damage < 0) {
-              generateParticles(targetElement, 'heal', Math.min(20, Math.abs(damage) / 2));
-            } else {
-              generateParticles(targetElement, 'magic', Math.min(20, damage / 3));
-            }
-          }
-          
-          resolve();
-        }
-      );
-    });
-  };
-  
-  const executeToolAnimation = async (animation) => {
-    const { userId, targetId, tool } = animation;
-    const isEnemyUser = enemyField.some(c => c.id === userId);
-    const isEnemyTarget = enemyField.some(c => c.id === targetId);
-    
-    const userElement = getCreatureElement(userId, isEnemyUser);
-    const targetElement = getCreatureElement(targetId, isEnemyTarget);
-    
-    if (!userElement || !targetElement) {
-      console.log("Missing elements for tool animation");
-      return;
-    }
-    
-    return new Promise(resolve => {
-      animateTool(userElement, targetElement, tool, resolve);
-    });
-  };
-  
-  const executeTurnTransitionAnimation = async (animation) => {
-    const { player, turnNumber } = animation;
-    
-    // Show turn transition
-    animateTurnTransition(player, turnNumber);
-    
-    // Resolve after animation duration
-    return new Promise(resolve => {
-      setTimeout(resolve, ANIMATION_DURATIONS.TURN_TRANSITION);
-    });
-  };
-  
-  const executeAIThinkingAnimation = async (animation) => {
-    const { enemyId, isComplex } = animation;
-    const enemyElement = getCreatureElement(enemyId, true);
-    
-    if (!enemyElement) {
-      console.log("Missing element for AI thinking animation");
-      return Promise.resolve();
-    }
-    
-    return new Promise(resolve => {
-      showAIThinking(enemyElement, isComplex, resolve);
-    });
-  };
-  
-  const executeScreenEffectAnimation = async (animation) => {
-    const { effect, params } = animation;
-    
-    switch (effect) {
-      case 'flash':
-        screenFlash(params.color, params.duration, params.intensity);
-        break;
-      case 'shake':
-        shakeScreen(params.intensity, params.duration);
-        break;
-      case 'particles':
-        const targetElement = document.querySelector(params.selector);
-        if (targetElement) {
-          generateParticles(targetElement, params.particleType, params.count);
-        }
-        break;
-    }
-    
-    // Resolve after a delay matching the effect
-    return new Promise(resolve => {
-      setTimeout(resolve, params.duration || 500);
-    });
-  };
-  
-  // Enqueue an animation to be processed
-  const queueAnimation = (animation) => {
-    dispatch({
-      type: ACTIONS.QUEUE_ANIMATION,
-      animation
-    });
-  };
   
   // BATTLE LOG
   const addToBattleLog = useCallback((message) => {
@@ -1578,7 +1586,7 @@ const BattleGame = ({ onClose }) => {
       }
     }, 300);
     
-  }, [playerField, playerEnergy, consecutiveActions, addToBattleLog]);
+  }, [playerField, playerEnergy, consecutiveActions, addToBattleLog, queueAnimation]);
   
   const attackCreature = useCallback((attacker, defender) => {
     if (!attacker || !defender) {
@@ -1622,7 +1630,7 @@ const BattleGame = ({ onClose }) => {
       attackType: attackType
     });
     
-  }, [playerField, playerEnergy, consecutiveActions, addToBattleLog]);
+  }, [playerField, playerEnergy, consecutiveActions, addToBattleLog, queueAnimation]);
   
   const useTool = useCallback((tool, targetCreature, isPlayerTool = true) => {
     if (!tool || !targetCreature) {
@@ -1681,7 +1689,7 @@ const BattleGame = ({ onClose }) => {
       tool: tool
     });
     
-  }, [playerField, difficulty, turn, selectedCreature, addToBattleLog]);
+  }, [playerField, difficulty, turn, selectedCreature, addToBattleLog, queueAnimation]);
   
   const useSpell = useCallback((spell, caster, target, isPlayerSpell = true) => {
     if (!spell || !caster) {
@@ -1737,7 +1745,7 @@ const BattleGame = ({ onClose }) => {
       damage: spellResult.spellEffect?.damage || spellResult.spellEffect?.healing || 0
     });
     
-  }, [playerEnergy, playerField, difficulty, turn, addToBattleLog]);
+  }, [playerEnergy, playerField, difficulty, turn, addToBattleLog, queueAnimation]);
   
   const defendCreatureAction = useCallback((creature) => {
     if (!creature) {
@@ -1766,7 +1774,7 @@ const BattleGame = ({ onClose }) => {
       defenderId: creature.id
     });
     
-  }, [playerField, playerEnergy, difficulty, addToBattleLog]);
+  }, [playerField, playerEnergy, difficulty, addToBattleLog, queueAnimation]);
   
   // ENHANCED AI TURN HANDLING WITH FIXES
   const handleEnemyTurn = useCallback(() => {
@@ -1807,7 +1815,8 @@ const BattleGame = ({ onClose }) => {
     enemyHand, 
     enemyField, 
     enemyTools,
-    enemySpells
+    enemySpells,
+    queueAnimation
   ]);
   
   const executeAIActionWithAnimation = useCallback(() => {
@@ -1864,7 +1873,7 @@ const BattleGame = ({ onClose }) => {
         executeActionSequenceWithAnimation(actionSequence, index + 1);
       }, 800);
     });
-  }, [executeSingleAIActionWithAnimation]);
+  }, []);
   
   const executeSingleAIActionWithAnimation = useCallback((aiAction, callback) => {
     console.log("Executing single AI action:", aiAction.type);
@@ -2129,7 +2138,7 @@ const BattleGame = ({ onClose }) => {
         console.log("Unknown AI action type:", aiAction.type);
         safeCallback();
     }
-  }, [difficulty, enemyField, turn, addToBattleLog]);
+  }, [difficulty, enemyField, turn, addToBattleLog, queueAnimation]);
   
   const finishEnemyTurn = useCallback(() => {
     console.log("Finishing enemy turn...");
@@ -2183,7 +2192,8 @@ const BattleGame = ({ onClose }) => {
     consecutiveActions,
     regenerateEnergy,
     applyEnergyDecay,
-    addToBattleLog
+    addToBattleLog,
+    queueAnimation
   ]);
   
   const processEnemyTurn = useCallback(() => {
@@ -2417,7 +2427,8 @@ const BattleGame = ({ onClose }) => {
     defendCreatureAction,
     applyEnergyDecay,
     addToBattleLog,
-    processEnemyTurn
+    processEnemyTurn,
+    queueAnimation
   ]);
   
   const handleCreatureSelect = useCallback((creature, isEnemy) => {
