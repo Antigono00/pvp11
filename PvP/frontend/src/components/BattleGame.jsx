@@ -1,4 +1,4 @@
-// src/components/BattleGame.jsx - ENHANCED VERSION WITH ANIMATIONS AND FIXES
+// src/components/BattleGame.jsx - ENHANCED VERSION WITH COMPLETE ANIMATIONS
 import React, { useState, useEffect, useContext, useCallback, useReducer, useRef } from 'react';
 import { GameContext } from '../context/GameContext';
 import { useRadixConnect } from '../context/RadixConnectContext';
@@ -15,7 +15,7 @@ import { processAttack, applyTool, applySpell, defendCreature } from '../utils/b
 import { generateEnemyCreatures, getDifficultySettings, generateEnemyItems } from '../utils/difficultySettings';
 import { processTimedEffect } from '../utils/itemEffects';
 
-// Import animation utilities
+// Import enhanced animation utilities
 import {
   animateAttack,
   animateDefend,
@@ -23,9 +23,15 @@ import {
   animateTool,
   animateTurnTransition,
   showAIThinking,
+  showDamageNumber,
+  showBlockEffect,
+  showComboIndicator,
+  generateComboBurst,
   screenFlash,
   shakeScreen,
   generateParticles,
+  getCreatureElementWithRetry,
+  waitForElement,
   ANIMATION_DURATIONS
 } from '../utils/battleAnimations';
 
@@ -276,7 +282,8 @@ const battleReducer = (state, action) => {
           targetId: attackResult.updatedDefender.id,
           damage: attackResult.damage,
           isCritical: attackResult.isCritical || false,
-          attackType: attackResult.attackType || 'physical'
+          attackType: attackResult.attackType || 'physical',
+          isBlocked: attackResult.isBlocked || false
         }
       };
     
@@ -707,13 +714,14 @@ const battleReducer = (state, action) => {
               c.id === attackResult.updatedAttacker.id ? attackResult.updatedAttacker : c
             );
             
-            // Track last attack for animations
+            // Track last attack for animations with blocked status
             updatedState.lastAttack = {
               attackerId: aiAction.attacker.id,
               targetId: aiAction.target.id,
               damage: attackResult.damage,
               isCritical: attackResult.isCritical || false,
-              attackType: attackResult.attackType || 'physical'
+              attackType: attackResult.attackType || 'physical',
+              isBlocked: attackResult.isBlocked || false
             };
           }
           break;
@@ -743,7 +751,7 @@ const battleReducer = (state, action) => {
           
         case 'useTool':
           if (aiAction.tool && aiAction.target) {
-            const result = applyTool(aiAction.target, aiAction.tool, state.difficulty);
+            const result = applyTool(aiAction.target, aiAction.tool, state.difficulty, state.turn);
             
             if (result && result.updatedCreature) {
               const isEnemyTarget = updatedState.enemyField.some(c => c.id === aiAction.target.id);
@@ -779,7 +787,7 @@ const battleReducer = (state, action) => {
               break;
             }
             
-            const spellResult = applySpell(aiAction.caster, aiAction.target, aiAction.spell, state.difficulty);
+            const spellResult = applySpell(aiAction.caster, aiAction.target, aiAction.spell, state.difficulty, state.turn);
             
             if (spellResult) {
               updatedState.enemyEnergy = Math.max(0, updatedState.enemyEnergy - spellCost);
@@ -847,13 +855,14 @@ const battleReducer = (state, action) => {
               c.id === attackResult.updatedAttacker.id ? attackResult.updatedAttacker : c
             );
             
-            // Track for animations
+            // Track for animations with blocked status
             newState.lastAttack = {
               attackerId: aiAction.attacker.id,
               targetId: aiAction.target.id,
               damage: attackResult.damage,
               isCritical: attackResult.isCritical || false,
-              attackType: attackResult.attackType || 'physical'
+              attackType: attackResult.attackType || 'physical',
+              isBlocked: attackResult.isBlocked || false
             };
             break;
             
@@ -1032,24 +1041,30 @@ const BattleGame = ({ onClose }) => {
     queueAnimationRef.current(animation);
   }, []);
 
-  // Helper to get creature element - define early since it doesn't have dependencies
-  const getCreatureElement = useCallback((creatureId, isEnemy) => {
-    if (isEnemy) {
-      return creatureElementsRef.current.enemy[creatureId];
-    } else {
-      return creatureElementsRef.current.player[creatureId];
+  // Helper to get creature element with retry logic
+  const getCreatureElement = useCallback(async (creatureId, isEnemy) => {
+    // Try to get element with retry logic
+    const element = await getCreatureElementWithRetry(creatureId, isEnemy);
+    if (element) {
+      // Update ref cache
+      if (isEnemy) {
+        creatureElementsRef.current.enemy[creatureId] = element;
+      } else {
+        creatureElementsRef.current.player[creatureId] = element;
+      }
     }
+    return element;
   }, []);
 
   // Define all animation execution functions and store them in ref
   animationFunctionsRef.current = {
     executeAttackAnimation: async (animation) => {
-      const { attackerId, targetId, damage, isCritical, attackType } = animation;
+      const { attackerId, targetId, damage, isCritical, attackType, isBlocked } = animation;
       const isEnemyAttacker = enemyField.some(c => c.id === attackerId);
       const isEnemyTarget = enemyField.some(c => c.id === targetId);
       
-      const attackerElement = getCreatureElement(attackerId, isEnemyAttacker);
-      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      const attackerElement = await getCreatureElement(attackerId, isEnemyAttacker);
+      const targetElement = await getCreatureElement(targetId, isEnemyTarget);
       
       if (!attackerElement || !targetElement) {
         console.log("Missing elements for attack animation");
@@ -1063,10 +1078,16 @@ const BattleGame = ({ onClose }) => {
           attackType || 'physical',
           isCritical || false,
           damage || 0,
+          isBlocked || false,
           () => {
+            // Additional effects based on damage
+            if (isCritical && damage && damage > 0) {
+              screenFlash('rgba(255, 215, 0, 0.3)', 400, 0.5);
+            }
+            
             if (damage && damage > 20) {
               const intensity = Math.min(10, Math.max(1, damage / 10));
-              shakeScreen(intensity);
+              shakeScreen(intensity, 400);
             }
             
             if (damage && damage > 0) {
@@ -1083,7 +1104,7 @@ const BattleGame = ({ onClose }) => {
       const { defenderId } = animation;
       const isEnemyDefender = enemyField.some(c => c.id === defenderId);
       
-      const defenderElement = getCreatureElement(defenderId, isEnemyDefender);
+      const defenderElement = await getCreatureElement(defenderId, isEnemyDefender);
       
       if (!defenderElement) {
         console.log("Missing element for defend animation");
@@ -1100,8 +1121,8 @@ const BattleGame = ({ onClose }) => {
       const isEnemyCaster = enemyField.some(c => c.id === casterId);
       const isEnemyTarget = enemyField.some(c => c.id === targetId);
       
-      const casterElement = getCreatureElement(casterId, isEnemyCaster);
-      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      const casterElement = await getCreatureElement(casterId, isEnemyCaster);
+      const targetElement = await getCreatureElement(targetId, isEnemyTarget);
       
       if (!casterElement || !targetElement) {
         console.log("Missing elements for spell animation");
@@ -1144,8 +1165,8 @@ const BattleGame = ({ onClose }) => {
       const isEnemyUser = enemyField.some(c => c.id === userId);
       const isEnemyTarget = enemyField.some(c => c.id === targetId);
       
-      const userElement = getCreatureElement(userId, isEnemyUser);
-      const targetElement = getCreatureElement(targetId, isEnemyTarget);
+      const userElement = await getCreatureElement(userId, isEnemyUser);
+      const targetElement = await getCreatureElement(targetId, isEnemyTarget);
       
       if (!userElement || !targetElement) {
         console.log("Missing elements for tool animation");
@@ -1169,7 +1190,7 @@ const BattleGame = ({ onClose }) => {
     
     executeAIThinkingAnimation: async (animation) => {
       const { enemyId, isComplex } = animation;
-      const enemyElement = getCreatureElement(enemyId, true);
+      const enemyElement = await getCreatureElement(enemyId, true);
       
       if (!enemyElement) {
         console.log("Missing element for AI thinking animation");
@@ -1178,6 +1199,16 @@ const BattleGame = ({ onClose }) => {
       
       return new Promise(resolve => {
         showAIThinking(enemyElement, isComplex, resolve);
+      });
+    },
+    
+    executeComboAnimation: async (animation) => {
+      const { comboLevel, isPlayer } = animation;
+      
+      showComboIndicator(comboLevel, isPlayer);
+      
+      return new Promise(resolve => {
+        setTimeout(resolve, ANIMATION_DURATIONS.COMBO_INDICATOR);
       });
     },
     
@@ -1233,6 +1264,9 @@ const BattleGame = ({ onClose }) => {
         break;
       case 'ai-thinking':
         await animationFunctions.executeAIThinkingAnimation(animation);
+        break;
+      case 'combo':
+        await animationFunctions.executeComboAnimation(animation);
         break;
       case 'screen-effect':
         await animationFunctions.executeScreenEffectAnimation(animation);
@@ -1409,40 +1443,6 @@ const BattleGame = ({ onClose }) => {
     }
   }, [creatureNfts]);
   
-  // New: Manage creature elements for animations
-  useEffect(() => {
-    // Get all creature elements and store references
-    const getCreatureElements = () => {
-      // Clear previous references
-      creatureElementsRef.current = {
-        player: {},
-        enemy: {}
-      };
-      
-      // Query for player creature elements
-      playerField.forEach(creature => {
-        const selector = `.battlefield-player .creature-card[data-id="${creature.id}"]`;
-        const element = document.querySelector(selector);
-        if (element) {
-          creatureElementsRef.current.player[creature.id] = element;
-        }
-      });
-      
-      // Query for enemy creature elements
-      enemyField.forEach(creature => {
-        const selector = `.battlefield-enemy .creature-card[data-id="${creature.id}"]`;
-        const element = document.querySelector(selector);
-        if (element) {
-          creatureElementsRef.current.enemy[creature.id] = element;
-        }
-      });
-    };
-    
-    // Update references after a short delay to ensure DOM is updated
-    const timeout = setTimeout(getCreatureElements, 100);
-    return () => clearTimeout(timeout);
-  }, [playerField, enemyField]);
-  
   // BATTLE LOG
   const addToBattleLog = useCallback((message) => {
     dispatch({ type: ACTIONS.ADD_LOG, message });
@@ -1606,9 +1606,15 @@ const BattleGame = ({ onClose }) => {
     
     const attackResult = processAttack(attacker, defender, attackType);
     
+    // Determine if attack was blocked
+    const isBlocked = attackResult.damage === 0 && defender.isDefending;
+    
     dispatch({ 
       type: ACTIONS.ATTACK, 
-      attackResult,
+      attackResult: {
+        ...attackResult,
+        isBlocked
+      },
       energyCost: ATTACK_ENERGY_COST
     });
     
@@ -1620,15 +1626,26 @@ const BattleGame = ({ onClose }) => {
     const energyMessage = isPlayerAttacker ? ` (-${ATTACK_ENERGY_COST} energy)` : '';
     addToBattleLog(attackResult.battleLog + energyMessage + comboMessage);
     
-    // Queue attack animation
+    // Queue attack animation with blocked status
     queueAnimation({
       type: 'attack',
       attackerId: attacker.id,
       targetId: defender.id,
       damage: attackResult.damage,
       isCritical: attackResult.isCritical,
-      attackType: attackType
+      attackType: attackType,
+      isBlocked: isBlocked
     });
+    
+    // Show combo animation if applicable
+    if (isPlayerAttacker && consecutiveActions.player >= 2) {
+      queueAnimation({
+        type: 'combo',
+        comboLevel: consecutiveActions.player + 1,
+        isPlayer: true,
+        delay: 300
+      });
+    }
     
   }, [playerField, playerEnergy, consecutiveActions, addToBattleLog, queueAnimation]);
   
@@ -1991,9 +2008,15 @@ const BattleGame = ({ onClose }) => {
           
         const attackResult = processAttack(aiAction.attacker, aiAction.target, attackType);
         
+        // Determine if attack was blocked
+        const isBlocked = attackResult.damage === 0 && aiAction.target.isDefending;
+        
         dispatch({
           type: ACTIONS.ATTACK,
-          attackResult,
+          attackResult: {
+            ...attackResult,
+            isBlocked
+          },
           energyCost: attackCost
         });
         
@@ -2001,7 +2024,7 @@ const BattleGame = ({ onClose }) => {
         
         addToBattleLog(`Enemy: ${attackResult.battleLog} (-${attackCost} energy)`);
         
-        // Queue attack animation with guaranteed callback
+        // Queue attack animation with guaranteed callback and blocked status
         queueAnimation({
           type: 'attack',
           attackerId: aiAction.attacker.id,
@@ -2009,7 +2032,20 @@ const BattleGame = ({ onClose }) => {
           damage: attackResult.damage,
           isCritical: attackResult.isCritical,
           attackType: attackType,
-          onComplete: safeCallback
+          isBlocked: isBlocked,
+          onComplete: () => {
+            // Show combo animation if applicable
+            if (consecutiveActions.enemy >= 2) {
+              queueAnimation({
+                type: 'combo',
+                comboLevel: consecutiveActions.enemy + 1,
+                isPlayer: false,
+                onComplete: safeCallback
+              });
+            } else {
+              safeCallback();
+            }
+          }
         });
         break;
         
@@ -2138,7 +2174,7 @@ const BattleGame = ({ onClose }) => {
         console.log("Unknown AI action type:", aiAction.type);
         safeCallback();
     }
-  }, [difficulty, enemyField, turn, addToBattleLog, queueAnimation]);
+  }, [difficulty, enemyField, turn, consecutiveActions, addToBattleLog, queueAnimation]);
   
   const finishEnemyTurn = useCallback(() => {
     console.log("Finishing enemy turn...");
@@ -2146,6 +2182,19 @@ const BattleGame = ({ onClose }) => {
     applyEnergyDecay();
     
     dispatch({ type: ACTIONS.INCREMENT_TURN });
+    
+    // Check for enemy combo bonus before resetting
+    if (consecutiveActions.enemy >= 3) {
+      dispatch({ type: ACTIONS.COMBO_BONUS, player: 'enemy' });
+      addToBattleLog("Enemy achieved a combo bonus!");
+      
+      // Show combo effect
+      queueAnimation({
+        type: 'combo',
+        comboLevel: consecutiveActions.enemy,
+        isPlayer: false
+      });
+    }
     
     // Queue turn transition animation
     queueAnimation({
@@ -2170,11 +2219,6 @@ const BattleGame = ({ onClose }) => {
         
         // Apply ongoing effects ONCE at the start of player's turn
         dispatch({ type: ACTIONS.APPLY_ONGOING_EFFECTS, addLog: addToBattleLog });
-        
-        if (consecutiveActions.enemy >= 3) {
-          dispatch({ type: ACTIONS.COMBO_BONUS, player: 'enemy' });
-          addToBattleLog("Enemy achieved a combo bonus!");
-        }
         
         addToBattleLog(`Turn ${turn + 1} - Your turn.`);
         
@@ -2386,6 +2430,13 @@ const BattleGame = ({ onClose }) => {
         if (consecutiveActions.player >= 3) {
           dispatch({ type: ACTIONS.COMBO_BONUS, player: 'player' });
           addToBattleLog("You achieved a combo bonus! All creatures gain +2 attack!");
+          
+          // Show combo effect
+          queueAnimation({
+            type: 'combo',
+            comboLevel: consecutiveActions.player,
+            isPlayer: true
+          });
         }
         
         applyEnergyDecay();
